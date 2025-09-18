@@ -51,11 +51,13 @@ def get_progress(
     description: str | None = None,
     disable: bool = False,
     add_console: bool = True,
+    show_iteration_time: bool = False,
+    show_remaining_time: bool = True,
 ) -> Progress:
     console = Console(width=80) if add_console else None
     description = description or "[progress.description]{task.description}"
 
-    progress = Progress(
+    columns = [
         TextColumn(description),
         BarColumn(
             style="white",
@@ -63,8 +65,14 @@ def get_progress(
         ),
         TaskProgressColumn(),
         MofNCompleteColumn(),
-        IterationTimeColumn(),
-        TimeRemainingColumn(),
+    ]
+    if show_iteration_time:
+        columns.append(IterationTimeColumn())
+    if show_remaining_time:
+        columns.append(TimeRemainingColumn())
+
+    progress = Progress(
+        *columns,
         console=console,
         disable=disable,
     )
