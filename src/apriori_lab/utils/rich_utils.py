@@ -15,6 +15,8 @@ from rich.progress import (
 )
 from rich.text import Text
 
+from apriori_lab.core.progress import HierarchicalProgress
+
 
 class IterationTimeColumn(ProgressColumn):
     def __init__(self, history_len=10):
@@ -53,7 +55,7 @@ def get_progress(
     add_console: bool = True,
     show_iteration_time: bool = False,
     show_remaining_time: bool = True,
-) -> Progress:
+) -> HierarchicalProgress:
     console = Console(width=80) if add_console else None
     description = description or "[progress.description]{task.description}"
 
@@ -76,4 +78,4 @@ def get_progress(
         console=console,
         disable=disable,
     )
-    return progress
+    return HierarchicalProgress(progress)

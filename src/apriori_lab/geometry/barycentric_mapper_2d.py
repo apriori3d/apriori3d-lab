@@ -4,8 +4,8 @@ from typing import Any, Protocol, runtime_checkable
 
 import torch
 
+from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
 from apriori_lab.geometry.utils import area2d, make_faces_ccw
-from apriori_lab.utils.rich_utils import get_progress
 
 
 def select_any_inside(
@@ -113,6 +113,7 @@ class BarycentricMapper2D:
     def __call__(
         self,
         query: torch.Tensor,
+        progress: ProgressProtocol | None = None,
         selector: FaceSelector = select_any_inside,
         **selector_kwargs,
     ) -> BarycentricMapperResult:
@@ -150,63 +151,58 @@ class BarycentricMapper2D:
         query_inside = torch.zeros((num_query,), dtype=torch.bool, device=device)
         query_to_face = torch.zeros((num_query,), dtype=torch.long, device=device)
 
-        progress = get_progress(
-            "Barycentric mapping..",
-            disable=(num_chunks <= 1),
-        )
-        with progress:
-            for i in progress.track(range(num_chunks)):
-                start = i * self.query_chunk_size
-                end = min((i + 1) * self.query_chunk_size, num_query)
-                query_chunk = query[start:end]  # (chunk, 2)
+        progress = progress or ConsoleProgress()
+        task = progress.add_task("Finding 2d barycentrics", total=num_chunks)
 
-                if query_needs_broadcast:
-                    query_chunk = query_chunk.unsqueeze(1)  # (chunk, 1, 2)
+        for i in range(num_chunks):
+            start = i * self.query_chunk_size
+            end = min((i + 1) * self.query_chunk_size, num_query)
+            query_chunk = query[start:end]  # (chunk, 2)
 
-                # Find barycentrics using triangle area method
-                w0 = area2d(query_chunk, v1, v2) * area_inv  # (chunk, tri)
-                w1 = area2d(query_chunk, v2, v0) * area_inv  # keep CCW order
-                w2 = 1 - w0 - w1
-                chunk_barycentrics = torch.stack(
-                    [w0, w1, w2], dim=-1
-                )  # (chunk, tri, 3)
+            if query_needs_broadcast:
+                query_chunk = query_chunk.unsqueeze(1)  # (chunk, 1, 2)
 
-                # Found points inside triangles
-                inside = (
-                    valid
-                    & (w0 > -self.eps_in)
-                    & (w1 > -self.eps_in)
-                    & (w2 > -self.eps_in)
-                )  # (chunk, poly)
+            # Find barycentrics using triangle area method
+            w0 = area2d(query_chunk, v1, v2) * area_inv  # (chunk, tri)
+            w1 = area2d(query_chunk, v2, v0) * area_inv  # keep CCW order
+            w2 = 1 - w0 - w1
+            chunk_barycentrics = torch.stack([w0, w1, w2], dim=-1)  # (chunk, tri, 3)
 
-                # Select face for each query
-                query_chunk_found, query_chunk_to_face = selector(
-                    chunk_barycentrics,
-                    inside,
-                    **selector_kwargs,
-                )  # (chunk, 1)
+            # Found points inside triangles
+            inside = (
+                valid & (w0 > -self.eps_in) & (w1 > -self.eps_in) & (w2 > -self.eps_in)
+            )  # (chunk, poly)
 
-                # Align with barycentrics shape (chunk, tri, 3)
-                query_chunk_to_face_for_bary = query_chunk_to_face.unsqueeze(-1).expand(
-                    -1, 1, 3
-                )
+            # Select face for each query
+            query_chunk_found, query_chunk_to_face = selector(
+                chunk_barycentrics,
+                inside,
+                **selector_kwargs,
+            )  # (chunk, 1)
 
-                # Collect found face barycentrics for each query
-                query_chunk_barycentrics = torch.gather(
-                    chunk_barycentrics,
-                    1,
-                    query_chunk_to_face_for_bary,
-                )  # (chunk, 1, 3)
+            # Align with barycentrics shape (chunk, tri, 3)
+            query_chunk_to_face_for_bary = query_chunk_to_face.unsqueeze(-1).expand(
+                -1, 1, 3
+            )
 
-                # Collect found face's inside flag for each query
-                query_chunk_inside = torch.gather(inside, 1, query_chunk_to_face)
-                query_chunk_inside &= query_chunk_found
+            # Collect found face barycentrics for each query
+            query_chunk_barycentrics = torch.gather(
+                chunk_barycentrics,
+                1,
+                query_chunk_to_face_for_bary,
+            )  # (chunk, 1, 3)
 
-                # Store chunk's result
-                chunk_indices = torch.arange(start, end, device=device)
-                barycentrics[chunk_indices] = query_chunk_barycentrics.squeeze()
-                query_inside[chunk_indices] = query_chunk_inside.squeeze()
-                query_to_face[chunk_indices] = query_chunk_to_face.squeeze()
+            # Collect found face's inside flag for each query
+            query_chunk_inside = torch.gather(inside, 1, query_chunk_to_face)
+            query_chunk_inside &= query_chunk_found
+
+            # Store chunk's result
+            chunk_indices = torch.arange(start, end, device=device)
+            barycentrics[chunk_indices] = query_chunk_barycentrics.squeeze()
+            query_inside[chunk_indices] = query_chunk_inside.squeeze()
+            query_to_face[chunk_indices] = query_chunk_to_face.squeeze()
+
+            progress.advance(task)
 
         return BarycentricMapperResult(
             barycentrics,

@@ -1,10 +1,7 @@
-from contextlib import nullcontext
-
-import rich
 import torch
 from torch.nn import functional as F
 
-from apriori_lab.utils.rich_utils import get_progress
+from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
 
 
 def find_closest_vertex(
@@ -181,8 +178,8 @@ def find_surface_convex_hull(
     num_elevation_bins: int = 6,
     convex_bins_ratio: float = 0.7,
     return_all_hulls: bool = True,
-    verbose: bool = False,
-    progress: rich.progress.Progress | None = None,
+    verbose: int = 0,
+    progress: ProgressProtocol = None,
 ) -> torch.Tensor:  # (num_hull_vertices,)
     if target_vertices.dim() == 1:
         target_vertices = target_vertices.unsqueeze(0)  # (1, 3)
@@ -237,79 +234,72 @@ def find_surface_convex_hull(
     )  # (batch_size, num_vertices)
     neighborhood[batch_indices, closest_vertices] = True
 
-    is_nasted = progress is not None
-    prefix = "↳ " if is_nasted else ""
-    local_progress = nullcontext(progress) if is_nasted else get_progress()
+    progress = progress or ConsoleProgress()
+    task = progress.add_task("Finding convex hull", total=max_steps)
 
-    with local_progress as p:
-        task = p.add_task(f"{prefix}Finding convex hull", total=max_steps)
+    for step in range(max_steps):
+        # Find neighbors
+        frontier = torch.sparse.mm(
+            adjacency, neighborhood.float().T
+        ).T  # (batch_size, num_vertices)
+        neighborhood = (frontier > 0) | (neighborhood > 0)
 
-        for step in range(max_steps):
-            # Find neighbors
-            frontier = torch.sparse.mm(
-                adjacency, neighborhood.float().T
-            ).T  # (batch_size, num_vertices)
-            neighborhood = (frontier > 0) | (neighborhood > 0)
+        # Find hull vertices
+        hull_vertices, hull_distances = find_surface_hull(
+            target_vertex=target_vertices,
+            vertices=vertices,
+            vertices_bins=vertices_bins,
+            vertices_select_mask=neighborhood,
+            num_bins=num_bins,
+        )  # (step_batch_size, num_bins)
 
-            # Find hull vertices
-            hull_vertices, hull_distances = find_surface_hull(
-                target_vertex=target_vertices,
-                vertices=vertices,
-                vertices_bins=vertices_bins,
-                vertices_select_mask=neighborhood,
-                num_bins=num_bins,
-            )  # (step_batch_size, num_bins)
+        # Find bins included in hull
+        hull_bins_included = torch.isfinite(
+            hull_distances
+        )  # (step_batch_size, num_bins)
+        hull_bins_hit = hull_bins_included.sum(dim=-1)  # (step_batch_size, )
+        hulls_convex = hull_bins_hit >= bins_convex_threshold  # (step_batch_size, )
+        hulls_num_convex = hulls_convex.sum().item()
 
-            # Find bins included in hull
-            hull_bins_included = torch.isfinite(
-                hull_distances
-            )  # (step_batch_size, num_bins)
-            hull_bins_hit = hull_bins_included.sum(dim=-1)  # (step_batch_size, )
-            hulls_convex = hull_bins_hit >= bins_convex_threshold  # (step_batch_size, )
-            hulls_num_convex = hulls_convex.sum().item()
+        # Update result storage
+        if hulls_num_convex > 0:
+            # Find indices in global batch
+            step_mask = ~convex_hull_found  # (step_batch_size,)
+            step_hull_indices = step_mask.nonzero(as_tuple=True)[
+                0
+            ]  # (step_batch_size,)
+            step_hull_convex_indices = step_hull_indices[
+                hulls_convex
+            ]  # (step_num_convex,)
 
-            # Update result storage
-            if hulls_num_convex > 0:
-                # Find indices in global batch
-                step_mask = ~convex_hull_found  # (step_batch_size,)
-                step_hull_indices = step_mask.nonzero(as_tuple=True)[
-                    0
-                ]  # (step_batch_size,)
-                step_hull_convex_indices = step_hull_indices[
-                    hulls_convex
-                ]  # (step_num_convex,)
+            # Update found convex items
+            convex_hull_vertices[step_hull_convex_indices] = hull_vertices[hulls_convex]
+            convex_hull_bins_included[step_hull_convex_indices] = hull_bins_included[
+                hulls_convex
+            ]
+            # Mark found items
+            convex_hull_found[step_hull_convex_indices] = True
 
-                # Update found convex items
-                convex_hull_vertices[step_hull_convex_indices] = hull_vertices[
-                    hulls_convex
-                ]
-                convex_hull_bins_included[step_hull_convex_indices] = (
-                    hull_bins_included[hulls_convex]
-                )
-                # Mark found items
-                convex_hull_found[step_hull_convex_indices] = True
+            # Keep only non convex targets in neighborhood
+            hulls_non_convex_indices = (~hulls_convex).nonzero(as_tuple=True)[0]
+            neighborhood = neighborhood[hulls_non_convex_indices]
+            target_vertices = target_vertices[hulls_non_convex_indices]
+            vertices_bins = vertices_bins[hulls_non_convex_indices]
 
-                # Keep only non convex targets in neighborhood
-                hulls_non_convex_indices = (~hulls_convex).nonzero(as_tuple=True)[0]
-                neighborhood = neighborhood[hulls_non_convex_indices]
-                target_vertices = target_vertices[hulls_non_convex_indices]
-                vertices_bins = vertices_bins[hulls_non_convex_indices]
+        progress.advance(task)
 
-            p.advance(task)
-            p.refresh()
+        if verbose == 1 and convex_hull_found.all():
+            progress.print(rf"✅ All hulls found by step {step}.")
+            progress.advance(task, max_steps - step - 1)
+            break
 
-            if verbose and convex_hull_found.all():
-                p.print(rf"✅ All hulls found by step {step}.")
-                break
-
-            if verbose:
-                remaining = (~convex_hull_found).sum().item()
-                mean_coverage = (hull_bins_hit.float() / num_bins).mean().item()
-                p.print(
-                    rf"\[Step {step:02d}] new convex: {hulls_num_convex}"
-                    rf", remaining: {remaining}, avg coverage: {mean_coverage:.2f}"
-                )
-        p.remove_task(task)
+        if verbose == 2:
+            remaining = (~convex_hull_found).sum().item()
+            mean_coverage = (hull_bins_hit.float() / num_bins).mean().item()
+            progress.print(
+                rf"\[Step {step:02d}] new convex: {hulls_num_convex}"
+                rf", remaining: {remaining}, avg coverage: {mean_coverage:.2f}"
+            )
 
     if return_all_hulls and not convex_hull_found.all():
         # Add remaining hulls to result

@@ -5,6 +5,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
 from apriori_lab.geometry.barycentric_mapper_2d import BarycentricMapper2D
 from apriori_lab.geometry.utils import triangle_local_frame
 from apriori_lab.utils.rich_utils import get_progress
@@ -228,6 +229,7 @@ class RayTriangleIntersector:
         ray_origin: torch.Tensor,
         ray_dir: torch.Tensor,
         back_culling: bool = True,
+        progress: ProgressProtocol | None = None,
     ) -> RayTriangleIntersectorResult:
         triangles = self.vertices[self.faces]  # (tri, 3, 2)
 
@@ -260,70 +262,69 @@ class RayTriangleIntersector:
         ray_hit = torch.zeros((num_query,), dtype=torch.bool, device=device)
         ray_to_face = torch.zeros((num_query,), dtype=torch.long, device=device)
 
-        progress = get_progress(
-            "Ray-plane intersection..",
-            disable=(num_chunks <= 1),
-        )
-        with progress:
-            for i in progress.track(range(num_chunks)):
-                start = i * self.query_chunk_size
-                end = min((i + 1) * self.query_chunk_size, num_query)
-                chunk_size = end - start
+        progress = progress or ConsoleProgress()
+        task = progress.add_task("Finding ray intersections", total=num_chunks)
 
-                # Chunking rays for processing
-                ray_origin_chunk = ray_origin[start:end].unsqueeze(1)  # (chunk, 1, 3)
-                ray_dirs_chunk = ray_dir[start:end].unsqueeze(1)  # (chunk, 1, 3)
+        for i in range(num_chunks):
+            start = i * self.query_chunk_size
+            end = min((i + 1) * self.query_chunk_size, num_query)
+            chunk_size = end - start
 
-                # Find intersection point for each ray/triangle combination
-                _, chunk_distances, point = ray_plane_intersection(
-                    ray_origins=ray_origin_chunk,
-                    ray_dirs=ray_dirs_chunk,
-                    plane_points=plane_points_world,
-                    plane_normals=plane_normals_world,
+            # Chunking rays for processing
+            ray_origin_chunk = ray_origin[start:end].unsqueeze(1)  # (chunk, 1, 3)
+            ray_dirs_chunk = ray_dir[start:end].unsqueeze(1)  # (chunk, 1, 3)
+
+            # Find intersection point for each ray/triangle combination
+            _, chunk_distances, point = ray_plane_intersection(
+                ray_origins=ray_origin_chunk,
+                ray_dirs=ray_dirs_chunk,
+                plane_points=plane_points_world,
+                plane_normals=plane_normals_world,
+            )
+
+            # Project point into local 2D space
+            point_world = point - plane_points_world  # (chunk, tri, 3)
+            point_local = torch.einsum(
+                "mij,nmi->nmj",
+                local_frames_2d,
+                point_world,
+            )  # (chunk, tri, 2)
+
+            if back_culling:
+                front_faces = (
+                    (ray_dirs_chunk * plane_normals_world).sum(dim=-1)
+                    < 0  # (chunk, tri)
+                )
+            else:
+                front_faces = (
+                    torch.tensor([True], device=device)
+                    .reshape(1, 1)
+                    .expand(chunk_size, num_tri)
                 )
 
-                # Project point into local 2D space
-                point_world = point - plane_points_world  # (chunk, tri, 3)
-                point_local = torch.einsum(
-                    "mij,nmi->nmj",
-                    local_frames_2d,
-                    point_world,
-                )  # (chunk, tri, 2)
+            # Find the closest intersected face for each ray.
+            # Use barycentrics in 2D to find faces being hit
+            # and chunk_distances to select the closest one.
+            mapper_result = self.barycentric_mapper(
+                point_local,
+                selector=select_closest_face_3d,
+                distances=chunk_distances,
+                front_faces=front_faces,
+                back_culling=back_culling,
+            )
 
-                if back_culling:
-                    front_faces = (
-                        (ray_dirs_chunk * plane_normals_world).sum(dim=-1)
-                        < 0  # (chunk, tri)
-                    )
-                else:
-                    front_faces = (
-                        torch.tensor([True], device=device)
-                        .reshape(1, 1)
-                        .expand(chunk_size, num_tri)
-                    )
+            chunk_indices = torch.arange(start, end, device=device)
+            barycentrics[chunk_indices] = mapper_result.barycentrics
+            ray_to_face[chunk_indices] = mapper_result.query_to_face
 
-                # Find the closest intersected face for each ray.
-                # Use barycentrics in 2D to find faces being hit
-                # and chunk_distances to select the closest one.
-                mapper_result = self.barycentric_mapper(
-                    point_local,
-                    selector=select_closest_face_3d,
-                    distances=chunk_distances,
-                    front_faces=front_faces,
-                    back_culling=back_culling,
-                )
-
-                chunk_indices = torch.arange(start, end, device=device)
-                barycentrics[chunk_indices] = mapper_result.barycentrics
-                ray_to_face[chunk_indices] = mapper_result.query_to_face
-
-                query_chunk_distances = torch.gather(
-                    chunk_distances,
-                    1,
-                    mapper_result.query_to_face.unsqueeze(-1),
-                )
-                distances[chunk_indices] = query_chunk_distances.squeeze()
-                ray_hit[chunk_indices] = mapper_result.query_inside
+            query_chunk_distances = torch.gather(
+                chunk_distances,
+                1,
+                mapper_result.query_to_face.unsqueeze(-1),
+            )
+            distances[chunk_indices] = query_chunk_distances.squeeze()
+            ray_hit[chunk_indices] = mapper_result.query_inside
+            progress.advance(task)
 
         ray_triangles = triangles[ray_to_face]
         v0 = ray_triangles[:, 0, :]
@@ -341,3 +342,99 @@ class RayTriangleIntersector:
             ray_hit,
             ray_to_face,
         )
+
+
+@dataclass
+class PointInsideTraceInfo:
+    ray_origins: torch.Tensor
+    ray_dirs: torch.Tensor
+    ray_hits: torch.Tensor
+    ray_hit_back_faces: torch.Tensor
+    ray_distances: torch.Tensor
+
+
+def detect_points_inside(
+    points: torch.Tensor,
+    faces: torch.Tensor,
+    vertices: torch.Tensor,
+    num_rays: int,
+    num_rays_min: int | None = None,
+    eps: float = 1e-6,
+    return_trace_info: bool = False,
+) -> torch.Tensor | tuple[torch.Tensor, PointInsideTraceInfo]:
+    num_rays_min = num_rays_min if num_rays_min is not None else num_rays
+    num_points = points.shape[0]
+    device = points.device
+
+    ray_origins = points.unsqueeze(1).expand(
+        num_points, num_rays, 3
+    )  # (num_keypoints, num_rays, 3)
+
+    ray_dirs = F.normalize(
+        torch.randn((num_points, num_rays, 3), dtype=torch.float32, device=device),
+        dim=-1,
+    )  # (num_keypoints, num_rays, 3)
+
+    # Find closest ray/face intersection
+    intersector = RayTriangleIntersector(faces, vertices)
+    intersector.prepare()
+
+    result = intersector(
+        ray_origins.reshape(-1, 3),  # Reshape tensors for intersection calculation
+        ray_dirs.reshape(-1, 3),
+        back_culling=False,
+    )
+
+    # Reshape result back
+    ray_hits = result.ray_hit.view(num_points, num_rays)  # (num_keypoints, num_rays)
+    ray_to_face = result.ray_to_face.view(
+        num_points, num_rays
+    )  # (num_keypoints, num_rays)
+
+    # Determine two conditions whether the keypoint inside the surface:
+    # 1. all rays hit faces
+    rays_all_hit = ray_hits.sum(dim=-1) == num_rays  # (num_keypoints,)
+
+    # 2. Face normal and ray have opposite direction
+    ray_to_face_vertices = vertices[
+        faces[ray_to_face]
+    ]  # (num_keypoints, num_rays, 3, 3)
+    # Compute face normals and determine back faces
+    # using the sign of the dot product with ray direction
+    v1, v2, v3 = ray_to_face_vertices.unbind(dim=2)  # (num_keypoints, num_rays, 3)
+
+    # Calculate in double precision to get correct result for near orthogonal cases
+    e1 = (v2 - v1).double()
+    e2 = (v3 - v1).double()
+    norm = F.normalize(
+        torch.cross(e1, e2, dim=-1)
+    ).double()  # (num_keypoints, num_ray, 3)
+    flat_batch_size = num_points * num_rays
+
+    zero = torch.tensor(0, dtype=torch.double, device=device)
+    safe_norm = norm.where(norm.abs() > eps, zero).double()
+    safe_ray_dirs = ray_dirs.where(ray_dirs.abs() > eps, zero).double()
+
+    faces_orientation = (
+        torch.bmm(
+            safe_norm.view(flat_batch_size, 1, 3),  # clamp for numerical stability
+            safe_ray_dirs.view(flat_batch_size, 3, 1),
+        ).view(num_points, num_rays)  # (num_keypoints, num_rays)
+    )
+    rays_hit_back_faces = faces_orientation > -eps  # (num_keypoints, num_rays)
+    all_rays_hit_back_faces = (
+        rays_hit_back_faces.sum(dim=-1) >= num_rays_min
+    )  # (num_keypoints,)
+
+    points_inside = rays_all_hit & all_rays_hit_back_faces
+
+    if return_trace_info:
+        return points_inside, PointInsideTraceInfo(
+            ray_origins=ray_origins,
+            ray_dirs=ray_dirs,
+            ray_hits=ray_hits,
+            ray_hit_back_faces=rays_hit_back_faces,
+            ray_distances=result.distances.reshape(num_points, num_rays),
+        )
+
+    return points_inside

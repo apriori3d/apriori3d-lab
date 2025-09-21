@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 
 
 def area2d(
@@ -152,3 +153,4 @@ def triangle_local_frame(
     frame = torch.stack([b0, b1, b2], dim=-1)  # (..., 3, 3)
 
     return not_collinear.squeeze(), frame
+
