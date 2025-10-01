@@ -288,12 +288,12 @@ def find_surface_convex_hull(
 
         progress.advance(task)
 
-        if verbose == 1 and convex_hull_found.all():
+        if verbose == 2 and convex_hull_found.all():
             progress.print(rf"✅ All hulls found by step {step}.")
             progress.advance(task, max_steps - step - 1)
             break
 
-        if verbose == 2:
+        if verbose == 3:
             remaining = (~convex_hull_found).sum().item()
             mean_coverage = (hull_bins_hit.float() / num_bins).mean().item()
             progress.print(
