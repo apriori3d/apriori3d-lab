@@ -5,7 +5,7 @@ from typing import Any, Protocol, runtime_checkable
 import torch
 
 from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
-from apriori_lab.geometry.utils import area2d, make_faces_ccw
+from apriori_lab.geometry.utils import area2d, make_faces_ccw, swap_with_mask
 
 
 def select_any_inside(
@@ -79,6 +79,13 @@ class BarycentricMapperResult:
     def query_to_face_inside(self) -> torch.Tensor:
         return self.query_to_face[self.query_inside]
 
+    def reshape(self, shape: tuple[int, ...]) -> "BarycentricMapperResult":
+        return BarycentricMapperResult(
+            self.barycentrics.reshape(*shape, 3),
+            self.query_inside.reshape(*shape),
+            self.query_to_face.reshape(*shape),
+        )
+
 
 class BarycentricMapper2D:
     def __init__(
@@ -100,7 +107,7 @@ class BarycentricMapper2D:
         self.prepared = False
 
     def prepare(self):
-        self.valid, area, self.faces = make_faces_ccw(
+        self.valid, area, self.faces, self.cw_mask = make_faces_ccw(
             self.faces,
             self.vertices,
             eps_zero=self.eps_zero,
@@ -152,7 +159,7 @@ class BarycentricMapper2D:
         query_to_face = torch.zeros((num_query,), dtype=torch.long, device=device)
 
         progress = progress or ConsoleProgress()
-        task = progress.add_task("Finding 2d barycentrics", total=num_chunks)
+        task = progress.add_task("Finding 2D barycentrics", total=num_chunks)
 
         for i in range(num_chunks):
             start = i * self.query_chunk_size
@@ -203,6 +210,13 @@ class BarycentricMapper2D:
             query_to_face[chunk_indices] = query_chunk_to_face.squeeze()
 
             progress.advance(task)
+
+        # Unflip barycentrics for faces that were originally CW.
+        if self.cw_mask.any():
+            swap_mask = self.cw_mask[query_to_face[query_inside]]
+            w0, w1, w2 = barycentrics[query_inside].unbind(dim=-1)  # (num_inside,)
+            swap_with_mask(swap_mask, w1, w2)
+            barycentrics[query_inside] = torch.stack([w0, w1, w2], dim=-1)
 
         return BarycentricMapperResult(
             barycentrics,

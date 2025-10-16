@@ -158,6 +158,15 @@ class RayTriangleIntersectorResult:
     def points_hit(self) -> torch.Tensor:
         return self.points[self.ray_hit]
 
+    def reshape(self, shape: tuple[int, ...]) -> "RayTriangleIntersectorResult":
+        return RayTriangleIntersectorResult(
+            self.points.reshape(*shape, 3),
+            self.distances.reshape(*shape),
+            self.barycentrics.reshape(*shape, 3),
+            self.ray_hit.reshape(*shape),
+            self.ray_to_face.reshape(*shape),
+        )
+
 
 class RayTriangleIntersector:
     def __init__(

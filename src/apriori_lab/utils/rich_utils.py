@@ -1,62 +1,112 @@
-import time
-from collections import defaultdict, deque
-from functools import partial
+from typing import Any
 
+from ai_vision.pipelines.body3d.core.progress.types import LiveProgress
 from rich.console import Console
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
-    ProgressColumn,
-    Task,
     TaskProgressColumn,
     TextColumn,
     TimeRemainingColumn,
 )
-from rich.text import Text
-
-from apriori_lab.core.progress import HierarchicalProgress
 
 
-class IterationTimeColumn(ProgressColumn):
-    def __init__(self, history_len=10):
-        super().__init__()
-        self.last_update_time = {}
-        self.last_format_in_ms = {}
-        self.delta_time_history = defaultdict(partial(deque, maxlen=history_len))
+class EasyProgress(Progress):
+    def __init__(self, *args: Any, **kw_args: Any):
+        super().__init__(*args, **kw_args)
+        self.print = self._print
 
-    def render(self, task: Task) -> Text:
-        now = time.perf_counter()
-        last_time = self.last_update_time.get(task.id, now)
-        self.last_update_time[task.id] = now
-        delta = now - last_time
+    def _print(self, *objects: Any, **kw_args: Any) -> None:
+        self.console.print(*objects, **kw_args)
 
-        task_delta_time = self.delta_time_history[task.id]
-        task_delta_time.append(delta)
-        avg_delta_time = sum(task_delta_time) / len(task_delta_time)
 
-        # Disable jitter in format type by adding hysteresis threshold
-        last_format_in_ms = self.last_format_in_ms.get(task.id, None)
-        extent = 0.1 if last_format_in_ms else 0
+class HierarchicalProgress(Progress):
+    def __init__(self, *args, **kw_args: Any):
+        super().__init__(*args, **kw_args)
+        self.level = 0
+        # Note: inaccurate design in rich.Progress - print() is not virtual
+        self.print = self._print
 
-        if avg_delta_time >= 0.1 + extent:
-            time_str = f"{avg_delta_time:.1f}s/iter"
-            self.last_format_in_ms[task.id] = False
+    def add_level(self):
+        self.level += 1
+
+    def remove_level(self):
+        self.level = max(0, self.level - 1)
+
+    def add_task(self, description: str, total: int, **fields: Any) -> int:
+        indent = f"{'  ' * (self.level - 1)}↳ " if self.level else ""
+        return super().add_task(f"{indent}{description}", total=total, **fields)
+
+    def update(
+        self,
+        task_id: int,
+        *,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        **fields: Any,
+    ) -> None:
+        if description is not None and self.level:
+            indent = f"{'  ' * (self.level - 1)}↳ "
+            description = f"{indent}{description}"
+
+        super().update(
+            task_id,
+            total=total,
+            completed=completed,
+            advance=advance,
+            description=description,
+            visible=visible,
+            refresh=refresh,
+            **fields,
+        )
+
+    def _print(self, *objects: Any, **kw_args: Any) -> None:
+        indent = "  " * (self.level) if self.level else ""
+        ident_objects = []
+        for obj in objects:
+            if isinstance(obj, str):
+                ident_objects.append(
+                    "\n".join([f"{indent}{s}" for s in obj.split("\n")]),
+                )
+            else:
+                ident_objects.append(obj)
+
+        self.console.print(*ident_objects, **kw_args)
+
+
+class PrefixProgress(HierarchicalProgress):
+    def __init__(self, *args: Any, **kw_args: Any):
+        super().__init__(*args, **kw_args)
+        self.prefix = None
+
+    def add_task(self, description: str, total: int, **fields: Any) -> int:
+        return super().add_task(
+            description if self.prefix is None else f"{self.prefix}{description}",
+            total,
+            **fields,
+        )
+
+    def _print(self, *args: Any, **kw_args: Any) -> None:
+        if self.prefix is not None and len(args) == 1 and isinstance(args[0], str):
+            # Single string argument - add prefix with frame index
+            super()._print(f"{self.prefix}{args[0]}")
         else:
-            time_str = f"{int(avg_delta_time * 1000)}ms/iter"
-            self.last_format_in_ms[task.id] = True
-
-        return Text(time_str, style="progress.remaining")
+            # Multiple or non-string arguments - print as is
+            super()._print(*args, **kw_args)
 
 
 def get_progress(
     description: str | None = None,
     disable: bool = False,
     add_console: bool = True,
-    show_iteration_time: bool = False,
     show_remaining_time: bool = True,
-) -> HierarchicalProgress:
-    console = Console(width=80) if add_console else None
+) -> LiveProgress:
+    console = Console(width=120) if add_console else None
     description = description or "[progress.description]{task.description}"
 
     columns = [
@@ -64,18 +114,18 @@ def get_progress(
         BarColumn(
             style="white",
             complete_style="bright_blue",
+            bar_width=None,
         ),
         TaskProgressColumn(),
         MofNCompleteColumn(),
     ]
-    if show_iteration_time:
-        columns.append(IterationTimeColumn())
     if show_remaining_time:
         columns.append(TimeRemainingColumn())
 
-    progress = Progress(
-        *columns,
-        console=console,
-        disable=disable,
+    return LiveProgress(
+        PrefixProgress(
+            *columns,
+            console=console,
+            disable=disable,
+        ),
     )
-    return HierarchicalProgress(progress)

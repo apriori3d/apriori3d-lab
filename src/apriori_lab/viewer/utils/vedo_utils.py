@@ -1,5 +1,6 @@
 import numpy as np
 import vedo
+from ai_vision.boiler.camera import Camera
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageLayout
 from trame.widgets import vtk, vuetify
@@ -29,6 +30,21 @@ def setup_remote_scene(plotter: Plotter, title: str = ""):
         vtk.VtkLocalView(plotter.window)
 
     return server
+
+
+def create_camera_frustum_for_camera(
+    camera: Camera,
+    label: str = "",
+):
+    return create_camera_frustum(
+        camera_focal=(camera.mtx[0, 0], camera.mtx[1, 1]),
+        camera_center=(camera.mtx[0, 2], camera.mtx[1, 2]),
+        image_size=(camera.image_width, camera.image_height),
+        camera_to_world_transform=camera.transform_to_world,
+        label=label,
+        up_direction=(0, -1, 0),  # y axis in image goes down
+        forward_direction=(0, 0, 1),  # camera looks along z
+    )
 
 
 def create_camera_frustum(
@@ -93,7 +109,7 @@ def create_camera_frustum(
     # draw camera label
     frustum_up = rays_world[2:4].mean(axis=0) - cam_center_world
     frustum_up[2] += 1e-2  # set offset from frustum
-    text_in_camera_frame_transform = camera_to_world_transform  # @ vedo_text_transform
+    text_in_camera_frame_transform = camera_to_world_transform
 
     label_transform = text_in_camera_frame_transform.copy()
     label_transform[:3, 3] += frustum_up

@@ -4,7 +4,6 @@ from vtkmodules.util.numpy_support import numpy_to_vtk
 
 
 class Overlay:
-
     def __init__(
         self,
         main_renderer: vtk.vtkRenderer,
@@ -48,7 +47,7 @@ class Overlay:
 
         target_w = max(1, x1 - x0)
         target_h = max(1, y1 - y0)
-        image_w, image_h, _ = self.image.GetDimensions()   # image real size
+        image_w, image_h, _ = self.image.GetDimensions()  # image real size
 
         self.actor.SetPosition(float(x0), float(y0), 0.0)
 
@@ -93,11 +92,13 @@ class Overlay:
         w, h, _ = self.image.GetDimensions()
 
         if image.shape[:2] != (h, w):
-            raise ValueError(f"Image shape for overlay does not match:"
-                             f"{image.shape[:2]} != {(h, w)}")
+            raise ValueError(
+                f"Image shape for overlay does not match:{image.shape[:2]} != {(h, w)}"
+            )
         if image.shape[2] not in [3, 4]:
-            raise ValueError(f"Image should have 3 or 4 channels, "
-                             f"not {image.shape[2]}.")
+            raise ValueError(
+                f"Image should have 3 or 4 channels, not {image.shape[2]}."
+            )
         if image.dtype not in [np.float32, np.uint8]:
             raise ValueError("Image data type should be torch.float32 or torch.uint8.")
 

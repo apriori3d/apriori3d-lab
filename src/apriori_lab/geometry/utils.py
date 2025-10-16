@@ -31,7 +31,7 @@ def make_faces_ccw(
     faces: torch.Tensor,
     vertices: torch.Tensor,
     eps_zero: float = 1e-12,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Reorder triangle faces to CCW in 2D and return validity + (non-negative) areas.
 
     The function treats `vertices` as 2D (UV/screen) or 3D but only XY is used.
@@ -48,6 +48,7 @@ def make_faces_ccw(
             valid (torch.Tensor): (F,) bool — True for non-degenerate triangles.
             area (torch.Tensor): (F,) non-negative 2*area for CCW-ordered faces (0 for degenerate).
             ccw_faces (torch.Tensor): (F, 3) reordered faces in CCW order.
+            cw_mask (torch.Tensor): (F,) bool — True for faces that were originally CW and got flipped.
 
     Notes:
         - If `vertices` is 3D, only XY components are used to determine orientation.
@@ -74,11 +75,11 @@ def make_faces_ccw(
 
     # Calculate signed area and find negative values
     area_signed = area2d(v0, v1, v2)  # (tri, )
-    negative = area_signed < -eps_zero
+    cw_mask = area_signed < -eps_zero
 
     # Reorder CW faces
-    if negative.any():
-        swap_with_mask(negative, vi1, vi2)
+    if cw_mask.any():
+        swap_with_mask(cw_mask, vi1, vi2)
 
     # Make area positive or zero
     area = area_signed.abs()
@@ -89,7 +90,7 @@ def make_faces_ccw(
     # Stack faces in CCW order
     ccw_faces = torch.stack([vi0, vi1, vi2], dim=-1)  # (tri, 3)
 
-    return valid, valid_area, ccw_faces
+    return valid, valid_area, ccw_faces, cw_mask
 
 
 def triangle_local_frame(
@@ -153,4 +154,3 @@ def triangle_local_frame(
     frame = torch.stack([b0, b1, b2], dim=-1)  # (..., 3, 3)
 
     return not_collinear.squeeze(), frame
-
