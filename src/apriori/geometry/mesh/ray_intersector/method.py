@@ -3,12 +3,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
+from apriori.flow.progress import ConsoleProgress, ProgressProtocol
+from apriori.geometry.mesh.barycentrics2d import BarycentricMapper2D
+from apriori.geometry.utils import triangle_local_frame
+from apriori.utils.rich_utils import get_progress
 from torch.nn import functional as F
-
-from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
-from apriori_lab.geometry.barycentric_mapper_2d import BarycentricMapper2D
-from apriori_lab.geometry.utils import triangle_local_frame
-from apriori_lab.utils.rich_utils import get_progress
 
 
 def ray_plane_intersection(

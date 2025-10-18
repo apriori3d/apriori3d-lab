@@ -1,7 +1,6 @@
 import torch
 import vedo
-
-from apriori_lab.geometry.surface_mapping import RayTriangleIntersector
+from apriori.geometry.mesh.ray_intersector import RayTriangleIntersector
 
 if __name__ == "__main__":
     vedo.settings.default_backend = "k3d"

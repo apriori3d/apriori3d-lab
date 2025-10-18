@@ -3,9 +3,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import torch
-
-from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
-from apriori_lab.geometry.utils import area2d, make_faces_ccw, swap_with_mask
+from apriori.flow.progress import ConsoleProgress, ProgressProtocol
+from apriori.geometry.utils import area2d, make_faces_ccw, swap_with_mask
 
 
 def select_any_inside(

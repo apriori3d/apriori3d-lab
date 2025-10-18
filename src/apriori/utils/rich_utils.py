@@ -1,6 +1,5 @@
 from typing import Any
 
-from ai_vision.pipelines.body3d.core.progress.types import LiveProgress
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -10,6 +9,8 @@ from rich.progress import (
     TextColumn,
     TimeRemainingColumn,
 )
+
+from apriori.flow.progress.types import LiveProgress
 
 
 class EasyProgress(Progress):

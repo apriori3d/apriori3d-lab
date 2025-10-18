@@ -5,12 +5,12 @@ version = "0.1.0"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["apriori_lab"]
+packages = ["apriori"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-src = ["apriori_lab"]
+src = ["apriori"]
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "UP", "SIM"]

@@ -1,4 +1,4 @@
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any
 
 from rich.live import Live
 from rich.progress import (
@@ -7,109 +7,17 @@ from rich.progress import (
 from rich.text import Text
 from typing_extensions import Self
 
-
-class ProgressProtocol(Protocol):
-    @property
-    def tasks(self) -> list[Any]: ...
-    def add_task(self, description: str, total: int, **fields: Any) -> int: ...
-    def advance(self, task_id: int, advance: int = 1) -> None: ...
-    def update(
-        self,
-        task_id: int,
-        *,
-        total: float | None = None,
-        completed: float | None = None,
-        advance: float | None = None,
-        description: str | None = None,
-        visible: bool | None = None,
-        refresh: bool = False,
-        **fields: Any,
-    ) -> None: ...
-    def remove_task(self, task_id: int) -> None: ...
-    def print(self, *objects: Any, **kw_args: Any) -> None: ...
-    def log(self, *objects: Any, **kw_args: Any) -> None: ...
+from apriori.flow.progress.types import ProgressProtocol, ProgressWithLevels
 
 
-class ConsoleProgress(ProgressProtocol):
-    @property
-    def tasks(self) -> list[Any]:
-        return []
-
-    def add_task(self, description: str, total: int, **fields: Any) -> int:
-        return 0
-
-    def advance(self, task_id: int, advance: int = 1) -> None:
-        pass
-
-    def update(
-        self,
-        task_id: int,
-        *,
-        total: float | None = None,
-        completed: float | None = None,
-        advance: float | None = None,
-        description: str | None = None,
-        visible: bool | None = None,
-        refresh: bool = False,
-        **fields: Any,
-    ) -> None:
-        pass
-
-    def remove_task(self, task_id: int) -> None:
-        pass
-
-    def print(self, *objects: Any, **kw_args: Any) -> None:
-        print(*objects, **kw_args)
-
-    def log(self, *objects: Any, **kw_args: Any) -> None:
-        print(*objects, **kw_args)
-
-
-class NopProgress(ProgressProtocol):
-    @property
-    def tasks(self) -> list[Any]:
-        return []
-
-    def add_task(self, description: str, total: int, **fields: Any) -> int:
-        return 0
-
-    def advance(self, task_id: int, advance: int = 1) -> None:
-        pass
-
-    def update(
-        self,
-        task_id: int,
-        *,
-        total: float | None = None,
-        completed: float | None = None,
-        advance: float | None = None,
-        description: str | None = None,
-        visible: bool | None = None,
-        refresh: bool = False,
-        **fields: Any,
-    ) -> None:
-        pass
-
-    def remove_task(self, task_id: int) -> None:
-        pass
-
-    def print(self, *objects: Any, **kw_args: Any) -> None:
-        pass
-
-    def log(self, *objects: Any, **kw_args: Any) -> None:
-        pass
-
-
-T = TypeVar("T", bound=ProgressProtocol)
-
-
-class LiveProgress(ProgressProtocol, Generic[T]):
-    def __init__(self, progress: T):
+class LiveProgress(ProgressProtocol):
+    def __init__(self, progress: ProgressProtocol):
         # All protocol methods are forwarded to the internal progress instance
-        self.progress: T = progress
+        self.progress = progress
 
         # Status needs to be set before being used in _make_layout
         self._status_task_id: int | None = None
+        self._prev_status: str = ""
 
         # Create live display for status updates
         self.live = Live(
@@ -122,11 +30,13 @@ class LiveProgress(ProgressProtocol, Generic[T]):
 
     def _make_layout(self):
         # Collect current status of the tracked task
-        status = ""
         if self._status_task_id is not None:
             status = next(
                 task for task in self.tasks if task.id == self._status_task_id
-            ).fields.get("status", status)
+            ).fields.get("status", "")
+            self._prev_status = status
+        else:
+            status = self._prev_status
 
         if self.progress.console is not None:
             status_text = self.progress.console.render_str(status)
@@ -169,8 +79,13 @@ class LiveProgress(ProgressProtocol, Generic[T]):
         description: str | None = None,
         visible: bool | None = None,
         refresh: bool = False,
+        status: str | None = None,
         **fields: Any,
     ) -> None:
+        if status is not None:
+            self._status_task_id = task_id
+            fields["status"] = status
+
         self.progress.update(
             task_id,
             total=total,
@@ -208,3 +123,12 @@ class LiveProgress(ProgressProtocol, Generic[T]):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # Exit live display context
         self.live.__exit__(exc_type, exc_val, exc_tb)
+
+    # Level support if underlying progress supports it
+    def add_level(self, prefix: str | None = None) -> None:
+        if isinstance(self.progress, ProgressWithLevels):
+            self.progress.add_level(prefix=prefix)
+
+    def remove_level(self) -> None:
+        if isinstance(self.progress, ProgressWithLevels):
+            self.progress.remove_level()

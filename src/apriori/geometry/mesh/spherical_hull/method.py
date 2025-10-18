@@ -1,7 +1,6 @@
 import torch
+from apriori.flow.progress import ConsoleProgress, ProgressProtocol
 from torch.nn import functional as F
-
-from apriori_lab.core.progress import ConsoleProgress, ProgressProtocol
 
 
 def find_closest_vertex(

@@ -6,48 +6,24 @@ import numpy as np
 import smplx
 import torch
 import vedo
+from apriori.flow.progress.rich.utils import get_progress
+from apriori.flow.progress.types import ProgressProtocol
+from apriori.geometry.mesh.barycentrics2d import (
+    BarycentricMapper2D,
+    BarycentricMapperResult,
+)
+from apriori.geometry.mesh.ray_intersector import (
+    RayTriangleIntersector,
+    RayTriangleIntersectorResult,
+)
+from apriori.geometry.viewer.utils.vedo_utils import create_camera_frustum
+from apriori.geometry.viewer.widgets.overlay import Overlay
 from nerfstudio.cameras.cameras import Cameras, CameraType
 from pytorch3d.io import load_obj
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageLayout
 from trame.widgets import vtk as vtk_widgets
 from trame.widgets import vuetify
-
-from apriori_lab.core.progress import ProgressProtocol
-from apriori_lab.geometry.barycentric_mapper_2d import (
-    BarycentricMapper2D,
-    BarycentricMapperResult,
-)
-from apriori_lab.geometry.ray_triangle_intersector import (
-    RayTriangleIntersector,
-    RayTriangleIntersectorResult,
-)
-from apriori_lab.utils.rich_utils import get_progress
-from apriori_lab.viewer.utils.vedo_utils import create_camera_frustum
-from apriori_lab.viewer.widgets.overlay import Overlay
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "smpl_model",
-        type=Path,
-        help="Path to smplx model",
-    )
-    parser.add_argument(
-        "uv_map",
-        type=Path,
-        help="Path to smplx uv mapping",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        help="Host to run visualization on",
-        default="0.0.0.0",
-    )
-
-    return parser.parse_args()
 
 
 def _draw_uv_map(
@@ -376,15 +352,38 @@ class Viewer:
         return result.reshape((height, width))
 
 
-if __name__ == "__main__":
-    # args = parse_args()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
 
-    # if not args.smpl_model.exists():
-    #     raise FileNotFoundError(args.smpl_model)
+    parser.add_argument(
+        "smpl_model_file",
+        type=Path,
+        help="Path to smplx model",
+    )
+    parser.add_argument(
+        "uv_map_file",
+        type=Path,
+        help="Path to smplx uv mapping",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        help="Host to run visualization on",
+        default="0.0.0.0",
+    )
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    if not args.smpl_model.exists():
+        raise FileNotFoundError(args.smpl_model)
 
     viewer = Viewer(
-        smpl_model_file="/home/developer/ai_vision/resources/body_models",
-        uv_map_file="/home/developer/ai_vision/resources/body_models/smplx/smplx_uv.obj",
+        smpl_model_file=args.smpl_model_file,
+        uv_map_file=args.uv_map_file,
         texture_size=(256, 256),
     )
     viewer()
