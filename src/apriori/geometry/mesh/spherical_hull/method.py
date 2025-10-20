@@ -1,5 +1,5 @@
 import torch
-from apriori.flow.progress import ConsoleProgress, ProgressProtocol
+from apriori.flow.progress.console import ConsoleProgress, ProgressProtocol
 from torch.nn import functional as F
 
 

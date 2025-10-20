@@ -1,13 +1,13 @@
 import argparse
 import contextlib
 
-# from ai_vision.pipelines.body3d import recordings
-# from ai_vision.pipelines.body3d.pipeline.result_saver import ResultSaver
-# from ai_vision.pipelines.body3d.run.parallel import ParallelRunner
-# from ai_vision.pipelines.body3d.run.single import SingleRunner
-# from ai_vision.pipelines.body3d.settings import Settings
-# from ai_vision.pipelines.body3d.utils.script_utils import is_running_in_jupyter
-# from ai_vision.pipelines.body3d.utils.utils import load_video_source
+# from ai_vision.recon.body3d import recordings
+# from ai_vision.recon.body3d.pipeline.result_saver import ResultSaver
+# from ai_vision.recon.body3d.run.parallel import ParallelRunner
+# from ai_vision.recon.body3d.run.single import SingleRunner
+# from ai_vision.core.data.settings  import Settings
+# from ai_vision.recon.body3d.utils.script_utils import is_running_in_jupyter
+# from ai_vision.recon.body3d.utils.utils import load_video_source
 
 
 # def run(
@@ -99,6 +99,6 @@ import contextlib
 #     pipeline.run(on_frame_results_callback=result_saver_callback)
 
 #     if run_evaluation:
-#         from ai_vision.pipelines.body3d.evaluation import run_with_settings as evaluate
+#         from ai_vision.recon.body3d.evaluation import run_with_settings as evaluate
 
 #         evaluate(settings)

@@ -6,7 +6,7 @@ import numpy as np
 import smplx
 import torch
 import vedo
-from apriori.flow.progress.rich.utils import get_progress
+from apriori.flow.progress.rich.utils import create_progress
 from apriori.flow.progress.types import ProgressProtocol
 from apriori.geometry.mesh.barycentrics2d import (
     BarycentricMapper2D,
@@ -82,11 +82,11 @@ class Viewer:
         self.overlay = Overlay(self.plt.renderer)
         self.view: vtk_widgets.VtkRemoteView | None = None
 
-    def __call__(self):
+    def show(self):
         # Load smplx model
-        with get_progress() as live:
-            task = live.add_task("Extracting texture...", total=3)
-            live.progress.add_level()
+        with create_progress() as progress:
+            task = progress.add_task("Extracting texture...", total=3)
+            progress.add_level()
 
             device = torch.cuda.current_device()
             body_model = smplx.create(
@@ -117,16 +117,18 @@ class Viewer:
             self.attach_resize_handlers()
             self.show_body(faces, vertices)
             self.show_uv_map(uv_faces, uvs)
-            live.advance(task)
+            progress.advance(task)
 
             # Find mapping from texture to surface and vice versa
             uv_mapping = self.find_texture_points_on_surface(
-                live, faces, vertices, uv_faces, uvs
+                progress, faces, vertices, uv_faces, uvs
             )
-            live.advance(task)
+            progress.advance(task)
 
-            ray_mapping = self.find_camera_rays_points_on_surface(live, faces, vertices)
-            live.advance(task)
+            ray_mapping = self.find_camera_rays_points_on_surface(
+                progress, faces, vertices
+            )
+            progress.advance(task)
 
             uv_faces = torch.unique(uv_mapping.query_to_face_inside)
             ray_faces = torch.unique(ray_mapping.ray_to_face_hit)
@@ -139,13 +141,13 @@ class Viewer:
             mapping_ratio = (
                 ray_pixels_in_tri[shared_faces] / uv_pixels_in_tri[shared_faces]
             ).mean()
-            live.print(f"mapping ratio:{mapping_ratio:.02f}")
+            progress.print(f"mapping ratio:{mapping_ratio:.02f}")
 
             # Build texture with mapping
-            self.build_texture_with_mapping(live, uv_mapping, ray_mapping)
+            self.build_texture_with_mapping(progress, uv_mapping, ray_mapping)
 
-            live.progress.remove_level()
-            live.print("✅ Extraction complete. You can interact with the view.")
+            progress.remove_level()
+            progress.print("✅ Extraction complete. You can interact with the view.")
 
             # Display results in browser
             self._start_server()
@@ -376,14 +378,21 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args = parse_args()
+    # args = parse_args()
 
-    if not args.smpl_model.exists():
-        raise FileNotFoundError(args.smpl_model)
+    # if not args.smpl_model.exists():
+    #     raise FileNotFoundError(args.smpl_model)
+
+    # viewer = Viewer(
+    #     smpl_model_file=args.smpl_model_file,
+    #     uv_map_file=args.uv_map_file,
+    #     texture_size=(256, 256),
+    # )
 
     viewer = Viewer(
-        smpl_model_file=args.smpl_model_file,
-        uv_map_file=args.uv_map_file,
+        smpl_model_file="/home/developer/ai_vision/resources/body_models",
+        uv_map_file="/home/developer/ai_vision/resources/body_models/smplx/smplx_uv.obj",
         texture_size=(256, 256),
     )
-    viewer()
+
+    viewer.show()

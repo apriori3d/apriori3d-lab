@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-from apriori.flow.progress import ConsoleProgress, ProgressProtocol
+from apriori.flow.progress.console import ConsoleProgress, ProgressProtocol
+from apriori.flow.progress.rich.utils import create_progress
 from apriori.geometry.mesh.barycentrics2d import BarycentricMapper2D
 from apriori.geometry.utils import triangle_local_frame
-from apriori.utils.rich_utils import get_progress
 from torch.nn import functional as F
 
 
@@ -181,7 +181,7 @@ class RayTriangleIntersector:
         self.query_chunk_size = query_chunk_size
         self.faces = faces  # (tri, 3)
         self.vertices = vertices.double()  # (tri, 3)
-        self.progress = get_progress("Ray-plane intersection..")
+        self.progress = create_progress("Ray-plane intersection..")
 
         self.valid: torch.Tensor | None = None
         self.local_frames: torch.Tensor | None = None

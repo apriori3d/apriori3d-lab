@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import torch
-from apriori.flow.progress import ConsoleProgress, ProgressProtocol
+from apriori.flow.progress.console import ConsoleProgress, ProgressProtocol
 from apriori.geometry.utils import area2d, make_faces_ccw, swap_with_mask
 
 
