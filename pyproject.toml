@@ -3,14 +3,16 @@ name = "apriori3d-lab"
 description = "Experimental geometry tools and notebooks for 3D reconstruction."
 version = "0.1.0"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["apriori"]
+[tool.poetry]
+packages = [
+    { include = "apriori/flow", from = "src" },
+    { include = "apriori/geometry", from = "src" },
+]
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-src = ["apriori"]
+src = ["apriori.flow", "apriori.geometry"]
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "UP", "SIM"]

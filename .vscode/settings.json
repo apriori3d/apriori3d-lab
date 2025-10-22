@@ -13,5 +13,6 @@
     },
     "editor.insertSpaces": true,
     "editor.detectIndentation": false,
-    "editor.tabSize": 4
+    "editor.tabSize": 4,
+
 }
