@@ -1,3 +1,5 @@
+from apriori.flow.progress.rich.levels import LevelsProgress
+from apriori.flow.progress.rich.live import LiveProgress
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -6,9 +8,6 @@ from rich.progress import (
     TextColumn,
     TimeRemainingColumn,
 )
-
-from apriori.flow.progress.rich.levels import LevelsProgress
-from apriori.flow.progress.rich.live import LiveProgress
 
 
 def create_progress(

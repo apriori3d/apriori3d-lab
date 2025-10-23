@@ -99,6 +99,9 @@ class PipelineExecutor(
 
         return PipelineResult(output, control_message)
 
+    def __str__(self) -> str:
+        return f"PipelineExecutor(pipeline={self.pipeline})"
+
     def _prepare_progress(self) -> int:
         self.progress = self.progress or NoOpProgress()
         return (

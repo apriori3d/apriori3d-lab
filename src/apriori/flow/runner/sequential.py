@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Generic, final
 
 from apriori.flow.pipeline.types import PipelineControlMessage, PipelineExecutorProtocol
+from apriori.flow.progress.console import ConsoleProgress
 from apriori.flow.progress.noop import NoOpProgress
 from apriori.flow.progress.types import (
     ProgressMixin,
@@ -24,9 +25,12 @@ from apriori.flow.runner.types import (
 
 @dataclass(slots=True)
 class SequentialRunnerConfig:
-    title: str | None = None
+    title: str = ""
     # Whether to show progress for each step in the pipeline
     show_pipeline_progress: bool = True
+
+    def __str__(self) -> str:
+        return f"SequentialRunner({self.title})"
 
 
 @final
@@ -46,10 +50,12 @@ class SequentialRunner(
         "_prepared",
         "_task",
         "config",
+        "input",
         "executor",
     )
 
     config: SequentialRunnerConfig
+    input: RunnerInputType
     executor: PipelineExecutorProtocol[
         PipelineConfigType,
         PipelineContextType,
@@ -66,15 +72,19 @@ class SequentialRunner(
     def __init__(
         self,
         config: SequentialRunnerConfig,
+        input: RunnerInputType,
         executor: PipelineExecutorType,
+        *,
         on_pipeline_result: OnPipelineResultType | None = None,
     ) -> None:
         self.config = config
+        self.input = input
         self.executor = executor
         self._prepared = False
         self._task = None
         self._pipeline_task = None
         self._on_pipeline_result = on_pipeline_result
+        self.progress = ConsoleProgress()  # Default progress
 
     # lifecycle hooks
 
@@ -102,19 +112,19 @@ class SequentialRunner(
                 step.runner.reset()
 
     # Main execution
-    def run(self, input_item: RunnerInputType) -> None:
+    def run(self) -> None:
         self.prepare()
         self.reset()
 
-        total = len(input_item) if isinstance(input_item, Sized) else None
+        total = len(self.input) if isinstance(self.input, Sized) else None
         self.progress.update(
             self._task,
-            description=f"▶️ {self.config.title or input_item}",
+            description=f"▶️ {self.config.title or self.input}",
             total=total,
             completed=0,
         )
 
-        for i, item in enumerate(input_item):
+        for i, item in enumerate(self.input):
             # Reset pipeline state before each run
             for step in self.executor.pipeline.steps:
                 if isinstance(step, StepWithRunner):
@@ -165,6 +175,38 @@ class SequentialRunner(
         if isinstance(self.executor, WithProgress):
             self.executor.progress = self.progress
             self.executor.shared_task = self._pipeline_task
+
+    def print_plan(self) -> None:
+        self._print_runner_plan(self)
+
+    def _print_runner_plan(self, runner: "SequentialRunner", prefix="") -> None:
+        runner.prepare()
+        # Print runner with input and pipeline info
+        runner_prefix = prefix if prefix == "" else f"{prefix}└──"
+        self.progress.print(
+            f"{runner_prefix}{runner.__class__.__name__}('{runner.config.title}')"
+        )
+
+        # Indent for runner structure.
+        # Note: for the last brunch, we do not use extra │
+        prefix = f"{prefix}   "
+        self.progress.print(f"{prefix}├──{runner.input}")
+        self.progress.print(f"{prefix}└──{runner.executor.pipeline}")
+
+        # Print pipeline steps.
+        prefix = f"{prefix}   "
+        self.progress.print(f"{prefix}├──{runner.executor.pipeline.input_step}")
+
+        for step in runner.executor.pipeline.steps:
+            if isinstance(step, StepWithRunner) and isinstance(
+                step.runner, SequentialRunner
+            ):
+                self.progress.print(f"{prefix}├──{step}")
+                self._print_runner_plan(step.runner, prefix=f"{prefix}│   ")
+            else:
+                self.progress.print(f"{prefix}├──{step}")
+
+        self.progress.print(f"{prefix}└──{runner.executor.pipeline.output_step}")
 
     def _add_level(self, prefix: str | None = None) -> None:
         if isinstance(self.progress, ProgressWithLevels):
