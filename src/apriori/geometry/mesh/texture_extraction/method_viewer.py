@@ -6,6 +6,13 @@ import numpy as np
 import smplx
 import torch
 import vedo
+from nerfstudio.cameras.cameras import Cameras, CameraType
+from pytorch3d.io import load_obj
+from trame.app import get_server
+from trame.ui.vuetify import SinglePageLayout
+from trame.widgets import vtk as vtk_widgets
+from trame.widgets import vuetify
+
 from apriori.flow.progress.rich.utils import create_progress
 from apriori.flow.progress.types import ProgressProtocol
 from apriori.geometry.mesh.barycentrics2d import (
@@ -18,12 +25,6 @@ from apriori.geometry.mesh.ray_intersector import (
 )
 from apriori.geometry.viewer.utils.vedo_utils import create_camera_frustum
 from apriori.geometry.viewer.widgets.overlay import Overlay
-from nerfstudio.cameras.cameras import Cameras, CameraType
-from pytorch3d.io import load_obj
-from trame.app import get_server
-from trame.ui.vuetify import SinglePageLayout
-from trame.widgets import vtk as vtk_widgets
-from trame.widgets import vuetify
 
 
 def _draw_uv_map(
@@ -86,7 +87,6 @@ class Viewer:
         # Load smplx model
         with create_progress() as progress:
             task = progress.add_task("Extracting texture...", total=3)
-            progress.add_level()
 
             device = torch.cuda.current_device()
             body_model = smplx.create(
@@ -146,7 +146,6 @@ class Viewer:
             # Build texture with mapping
             self.build_texture_with_mapping(progress, uv_mapping, ray_mapping)
 
-            progress.remove_level()
             progress.print("✅ Extraction complete. You can interact with the view.")
 
             # Display results in browser

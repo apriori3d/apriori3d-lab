@@ -1,5 +1,3 @@
-from apriori.flow.progress.rich.levels import LevelsProgress
-from apriori.flow.progress.rich.live import LiveProgress
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -9,13 +7,16 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from apriori.flow.progress.rich.live_progress import LiveProgress
+from apriori.flow.progress.rich.tree_progress import TreeProgress
+
 
 def create_progress(
     description: str | None = None,
     disable: bool = False,
     add_console: bool = True,
     show_remaining_time: bool = True,
-) -> LevelsProgress:
+) -> TreeProgress:
     console = Console(width=120) if add_console else None
     description = description or "[progress.description]{task.description}"
 
@@ -32,7 +33,7 @@ def create_progress(
     if show_remaining_time:
         columns.append(TimeRemainingColumn())
 
-    return LevelsProgress(
+    return TreeProgress(
         *columns,
         console=console,
         disable=disable,

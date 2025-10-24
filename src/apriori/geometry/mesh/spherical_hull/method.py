@@ -1,6 +1,8 @@
 import torch
-from apriori.flow.progress.console import ConsoleProgress, ProgressProtocol
 from torch.nn import functional as F
+
+from apriori.flow.progress.console import ProgressProtocol
+from apriori.flow.progress.noop import NoOpProgress
 
 
 def find_closest_vertex(
@@ -179,6 +181,7 @@ def find_surface_convex_hull(
     return_all_hulls: bool = True,
     verbose: int = 0,
     progress: ProgressProtocol = None,
+    task: int | None = None,
 ) -> torch.Tensor:  # (num_hull_vertices,)
     if target_vertices.dim() == 1:
         target_vertices = target_vertices.unsqueeze(0)  # (1, 3)
@@ -233,8 +236,16 @@ def find_surface_convex_hull(
     )  # (batch_size, num_vertices)
     neighborhood[batch_indices, closest_vertices] = True
 
-    progress = progress or ConsoleProgress()
-    task = progress.add_task("Finding convex hull", total=max_steps)
+    progress = progress or NoOpProgress()
+    if task is None:
+        task = progress.add_task("Finding convex hull", total=max_steps)
+    else:
+        progress.update(
+            task,
+            description="Finding convex hull",
+            total=max_steps,
+            completed=0,
+        )
 
     for step in range(max_steps):
         # Find neighbors

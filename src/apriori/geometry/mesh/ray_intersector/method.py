@@ -3,11 +3,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-from apriori.flow.progress.console import ConsoleProgress, ProgressProtocol
-from apriori.flow.progress.rich.utils import create_progress
+from torch.nn import functional as F
+
+from apriori.flow.progress.noop import NoOpProgress
+from apriori.flow.progress.types import ProgressMixin
 from apriori.geometry.mesh.barycentrics2d import BarycentricMapper2D
 from apriori.geometry.utils import triangle_local_frame
-from torch.nn import functional as F
 
 
 def ray_plane_intersection(
@@ -167,7 +168,7 @@ class RayTriangleIntersectorResult:
         )
 
 
-class RayTriangleIntersector:
+class RayTriangleIntersector(ProgressMixin):
     def __init__(
         self,
         faces: torch.Tensor,
@@ -181,15 +182,17 @@ class RayTriangleIntersector:
         self.query_chunk_size = query_chunk_size
         self.faces = faces  # (tri, 3)
         self.vertices = vertices.double()  # (tri, 3)
-        self.progress = create_progress("Ray-plane intersection..")
 
         self.valid: torch.Tensor | None = None
         self.local_frames: torch.Tensor | None = None
         self.edge_local: torch.Tensor | None = None
         self.barycentric_mapper: BarycentricMapper2D | None = None
+        self.progress = NoOpProgress()
         self.prepared = False
 
     def prepare(self):
+        if self.prepared:
+            return
         # Local orthonormal local_frames (b0, b1, b2) per triangle
         triangles = self.vertices[self.faces]  # (poly, 3, 2)
         self.valid, self.local_frames = triangle_local_frame(triangles)
@@ -237,7 +240,6 @@ class RayTriangleIntersector:
         ray_origin: torch.Tensor,
         ray_dir: torch.Tensor,
         back_culling: bool = True,
-        progress: ProgressProtocol | None = None,
     ) -> RayTriangleIntersectorResult:
         triangles = self.vertices[self.faces]  # (tri, 3, 2)
 
@@ -270,8 +272,7 @@ class RayTriangleIntersector:
         ray_hit = torch.zeros((num_query,), dtype=torch.bool, device=device)
         ray_to_face = torch.zeros((num_query,), dtype=torch.long, device=device)
 
-        progress = progress or ConsoleProgress()
-        task = progress.add_task("Finding ray intersections", total=num_chunks)
+        task = self.prepare_task("Finding ray intersections", total=num_chunks)
 
         for i in range(num_chunks):
             start = i * self.query_chunk_size
@@ -332,7 +333,8 @@ class RayTriangleIntersector:
             )
             distances[chunk_indices] = query_chunk_distances.squeeze()
             ray_hit[chunk_indices] = mapper_result.query_inside
-            progress.advance(task)
+
+            self.progress.advance(task)
 
         ray_triangles = triangles[ray_to_face]
         v0 = ray_triangles[:, 0, :]

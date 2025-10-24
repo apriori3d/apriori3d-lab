@@ -6,7 +6,12 @@ from typing_extensions import runtime_checkable
 class ProgressProtocol(Protocol):
     @property
     def tasks(self) -> list[Any]: ...
-    def add_task(self, description: str, total: int, **fields: Any) -> int: ...
+    def add_task(
+        self,
+        description: str,
+        total: int,
+        **fields: Any,
+    ) -> int: ...
     def advance(self, task_id: int, advance: int = 1) -> None: ...
     def update(
         self,
@@ -25,7 +30,6 @@ class ProgressProtocol(Protocol):
     def log(self, *objects: Any, **kw_args: Any) -> None: ...
 
 
-
 class ProgressMixin:
     _progress: ProgressProtocol | None = None
     _shared_task: int | None = None
@@ -39,6 +43,10 @@ class ProgressMixin:
         self._progress = progress
 
     @property
+    def has_shared_task(self) -> bool:
+        return self._shared_task is not None
+
+    @property
     def shared_task(self) -> int | None:
         return self._shared_task
 
@@ -46,30 +54,21 @@ class ProgressMixin:
     def shared_task(self, task: int | None) -> None:
         self._shared_task = task
 
+    def prepare_task(self, description: str, total: int) -> int | None:
+        if self.progress is None:
+            return None
+        if self.has_shared_task:
+            self.progress.update(
+                self.shared_task,
+                description=description,
+                total=total,
+                completed=0,
+            )
+            return self.shared_task
+        return self.progress.add_task(description, completed=0, total=total)
+
 
 @runtime_checkable
 class WithProgress(Protocol):
     progress: ProgressProtocol | None
     shared_task: int | None
-
-
-
-@runtime_checkable
-class ProgressWithPrefix(Protocol):
-    @property
-    def prefix(self) -> str: ...
-
-    @prefix.setter
-    def prefix(self, prefix: str) -> None: ...
-
-
-@runtime_checkable
-class ProgressWithLevels(Protocol):
-    def add_level(self, prefix: str | None = None) -> None: ...
-    def remove_level(self) -> None: ...
-
-
-
-
-
-

@@ -3,11 +3,12 @@ from typing import Any
 from rich.live import Live
 from rich.progress import (
     Group,
+    TaskID,
 )
 from rich.text import Text
 from typing_extensions import Self
 
-from apriori.flow.progress.types import ProgressProtocol, ProgressWithLevels
+from apriori.flow.progress.types import ProgressProtocol
 
 
 class LiveProgress(ProgressProtocol):
@@ -59,19 +60,19 @@ class LiveProgress(ProgressProtocol):
         total: int,
         show_status: bool = False,
         **fields: Any,
-    ) -> int:
+    ) -> TaskID:
         task = self.progress.add_task(description, total=total, **fields)
         # Track this task as status task if requested
         if show_status:
             self._status_task_id = task
         return task
 
-    def advance(self, task_id: int, advance: int = 1) -> None:
+    def advance(self, task_id: TaskID, advance: int = 1) -> None:
         self.progress.advance(task_id, advance=advance)
 
     def update(
         self,
-        task_id: int,
+        task_id: TaskID,
         *,
         total: float | None = None,
         completed: float | None = None,
@@ -99,7 +100,7 @@ class LiveProgress(ProgressProtocol):
         # Update live display to reflect changes
         self.live.update(self._make_layout())
 
-    def remove_task(self, task_id: int) -> None:
+    def remove_task(self, task_id: TaskID) -> None:
         self.progress.remove_task(task_id)
 
         # Clear status task if it was removed
@@ -123,12 +124,3 @@ class LiveProgress(ProgressProtocol):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # Exit live display context
         self.live.__exit__(exc_type, exc_val, exc_tb)
-
-    # Level support if underlying progress supports it
-    def add_level(self, prefix: str | None = None) -> None:
-        if isinstance(self.progress, ProgressWithLevels):
-            self.progress.add_level(prefix=prefix)
-
-    def remove_level(self) -> None:
-        if isinstance(self.progress, ProgressWithLevels):
-            self.progress.remove_level()

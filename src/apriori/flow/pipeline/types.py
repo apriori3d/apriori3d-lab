@@ -15,7 +15,7 @@ PipelineOutputType = TypeVar("PipelineOutputType")
 # Control messages for pipeline execution flow
 class PipelineControlMessage(Enum):
     Continue = auto()
-    Finalize = auto()
+    StopCycle = auto()
 
 
 # Define protocols for steps
@@ -52,8 +52,14 @@ OutputStep: TypeAlias = OutputStepProtocol[
 
 # Step Life cycle protocol
 @runtime_checkable
-class StepWithPrepare(Protocol[PipelineConfigType, PipelineContextType]):
-    def prepare(self, context: PipelineContextType) -> None: ...
+class StepWithLifeCycle(Protocol[PipelineContextType]):
+    def on_cycle_start(self, context: PipelineContextType) -> None:
+        """Called at the start of each execution cycle to reset state if needed."""
+        ...
+
+    def on_cycle_end(self, context: PipelineContextType) -> None:
+        """Called at the end of each execution cycle to finalize state if needed."""
+        ...
 
 
 # Pipeline definition
@@ -64,8 +70,15 @@ class Pipeline(Generic[PipelineConfigType, PipelineInputType, PipelineOutputType
     steps: list[Step]
     output_step: OutputStep
 
+    @property
+    def num_steps(self) -> int:
+        return len(self.steps) + 2  # Including input and output steps
+
     def __str__(self) -> str:
-        return f"Pipeline(steps={len(self.steps)})"
+        return f"Pipeline({str(self.config)})"
+
+    def __repr__(self) -> str:
+        return f"Pipeline(config={str(self.config)}, steps={len(self.steps)})"
 
 
 # Executor protocol
@@ -83,13 +96,29 @@ class PipelineExecutorProtocol(
     context: PipelineContextType
 
     # Lifecycle methods
-    def prepare(self) -> None: ...
-    def reset(self) -> None: ...
+
+    def prepare(self) -> None:
+        """Prepare the executor for running the pipeline. Called once before execution."""
+        ...
+
+    def on_cycle_start(self) -> None:
+        """Called at the start of each execution cycle to reset state if needed."""
+        ...
+
+    def on_cycle_end(self) -> None:
+        """Called at the end of each execution cycle to finalize state if needed."""
+        ...
+
+    def cleanup(self) -> None:
+        """Cleanup resources after execution is complete. Called once after execution."""
+        ...
 
     # Main execution method
     def run(
         self, input_data: PipelineInputType
-    ) -> "PipelineResult[PipelineOutputType]": ...
+    ) -> "PipelineResult[PipelineOutputType]":
+        """Execute the pipeline with the given input data and return the result."""
+        ...
 
 
 @dataclass(slots=True)
