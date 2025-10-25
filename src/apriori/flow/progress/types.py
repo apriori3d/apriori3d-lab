@@ -69,6 +69,6 @@ class ProgressMixin:
 
 
 @runtime_checkable
-class WithProgress(Protocol):
+class HasProgress(Protocol):
     progress: ProgressProtocol | None
     shared_task: int | None

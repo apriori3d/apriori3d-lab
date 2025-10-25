@@ -44,7 +44,7 @@ class RunnerProtocol(
 
 # Define a protocol for steps with nested runner to support pipeline hierarchies
 @runtime_checkable
-class StepWithRunner(Protocol):
+class StepHasRunner(Protocol):
     runner: RunnerProtocol[
         RunnerInputType,
         PipelineConfigType,

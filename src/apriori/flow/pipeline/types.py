@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Generic, Protocol, TypeAlias, TypeVar
 
+import torch
 from typing_extensions import runtime_checkable
 
 # Generic type variables for Pipeline
@@ -125,3 +126,14 @@ class PipelineExecutorProtocol(
 class PipelineResult(Generic[PipelineOutputType]):
     output: PipelineOutputType
     control: PipelineControlMessage
+
+
+@runtime_checkable
+class HasState(Protocol):
+    def get_state(self) -> dict[str, torch.Tensor]:
+        """Get the current state of the executor as a dictionary of tensors."""
+        ...
+
+    def load_state_dict(self, state: dict[str, torch.Tensor]) -> None:
+        """Load the executor state from a dictionary of tensors."""
+        ...

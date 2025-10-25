@@ -14,8 +14,8 @@ from apriori.flow.pipeline.types import (
 )
 from apriori.flow.progress.noop import NoOpProgress
 from apriori.flow.progress.types import (
+    HasProgress,
     ProgressMixin,
-    WithProgress,
 )
 
 
@@ -78,7 +78,7 @@ class PipelineExecutor(
 
     def _attach_progress_to_steps(self, *steps: Step) -> None:
         for step in steps:
-            if isinstance(step, WithProgress):
+            if isinstance(step, HasProgress):
                 step.progress = self.progress
                 step.shared_task = self._task
 
