@@ -1,12 +1,12 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Generic, Protocol, TypeAlias, TypeVar, runtime_checkable
+from typing import Generic, Protocol, TypeAlias, TypeVar, runtime_checkable
 
 from apriori.flow.pipeline.types import (
-    Pipeline,
     PipelineExecutorProtocol,
     PipelineResult,
 )
+from apriori.flow.runner.lifecycle_mixin import LifecycleProtocol
 
 PipelineConfigType = TypeVar("PipelineConfigType")
 PipelineContextType = TypeVar("PipelineContextType")
@@ -15,65 +15,17 @@ PipelineOutputType = TypeVar("PipelineOutputType")
 RunnerInputType = TypeVar("RunnerInputType", bound=Iterable[PipelineInputType])
 
 
-class RunnerProtocol(
-    Protocol,
-    Generic[
-        RunnerInputType,
-        PipelineConfigType,
-        PipelineContextType,
-        PipelineInputType,
-        PipelineOutputType,
-    ],
-):
-    pipeline: PipelineExecutorProtocol[
-        PipelineConfigType,
-        PipelineContextType,
-        PipelineInputType,
-        PipelineOutputType,
-    ]
-
-    # Lifecycle hooks
-    def prepare(self) -> None: ...
-    def on_cycle_start(self) -> None: ...
-    def on_cycle_end(self) -> None: ...
-    def cleanup(self) -> None: ...
-
-    # Main run method
-    def run(self, stream: RunnerInputType) -> Any: ...
-
-
-# Define a protocol for steps with nested runner to support pipeline hierarchies
-@runtime_checkable
-class StepHasRunner(Protocol):
-    runner: RunnerProtocol[
-        RunnerInputType,
-        PipelineConfigType,
-        PipelineContextType,
-        PipelineInputType,
-        PipelineOutputType,
-    ]
-
-
 @dataclass(slots=True)
-class RunnereResult(
-    Generic[
-        PipelineConfigType,
-        PipelineContextType,
-        PipelineInputType,
-        PipelineOutputType,
-    ],
+class RunnerResult(
+    Generic[PipelineOutputType,],
 ):
-    item_index: int
-    context: PipelineContextType
-    pipeline: Pipeline[
-        PipelineConfigType,
-        PipelineInputType,
-        PipelineOutputType,
-    ]
+    input_index: int
     pipeline_result: PipelineResult[PipelineOutputType]
 
 
-OnPipelineResultType: TypeAlias = Callable[[RunnereResult], None]
+RunnerResultType: TypeAlias = RunnerResult[PipelineOutputType]
+
+OnResultCallbackType: TypeAlias = Callable[[RunnerResultType], None]
 
 # Define a type alias for the pipeline used in the runner for better readability
 PipelineExecutorType: TypeAlias = PipelineExecutorProtocol[
@@ -82,3 +34,38 @@ PipelineExecutorType: TypeAlias = PipelineExecutorProtocol[
     PipelineInputType,
     PipelineOutputType,
 ]
+
+
+class RunnerProtocol(
+    LifecycleProtocol,
+    Generic[
+        RunnerInputType,
+        PipelineConfigType,
+        PipelineContextType,
+        PipelineInputType,
+        PipelineOutputType,
+    ],
+):
+    input: RunnerInputType
+    pipeline_executor: PipelineExecutorType
+
+    # Callback to be called on each result
+    on_result: OnResultCallbackType | None
+
+    # Main run method
+    def run(self) -> None: ...
+
+
+RunnerType: TypeAlias = RunnerProtocol[
+    RunnerInputType,
+    PipelineConfigType,
+    PipelineContextType,
+    PipelineInputType,
+    PipelineOutputType,
+]
+
+
+# Define a protocol for elements with nested runner to support pipeline hierarchies
+@runtime_checkable
+class HasRunner(Protocol):
+    runner: RunnerType

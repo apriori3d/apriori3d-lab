@@ -57,11 +57,16 @@ class PipelineExecutor(
         """
         if self._prepared:
             return
-        self._prepared = True
 
         # Create task for pipeline if not shared task is provided
         if self.has_shared_task:
             self._task = self.shared_task
+            self.progress.update(
+                self._task,
+                description=str(self.pipeline),
+                total=self.pipeline.num_steps,
+                completed=0,
+            )
         else:
             self._task = self.progress.add_task(
                 description=str(self.pipeline),
@@ -75,6 +80,7 @@ class PipelineExecutor(
             self.pipeline.output_step,
             *self.pipeline.steps,
         )
+        self._prepared = True
 
     def _attach_progress_to_steps(self, *steps: Step) -> None:
         for step in steps:

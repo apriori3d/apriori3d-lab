@@ -134,6 +134,6 @@ class HasState(Protocol):
         """Get the current state of the executor as a dictionary of tensors."""
         ...
 
-    def load_state_dict(self, state: dict[str, torch.Tensor]) -> None:
+    def load_state(self, state: dict[str, torch.Tensor]) -> None:
         """Load the executor state from a dictionary of tensors."""
         ...
