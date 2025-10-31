@@ -1,22 +1,22 @@
 from typing import final
 
+from apriori.flow.executor.types import PipelineExecutorProtocol
+from apriori.flow.lifecycle import HasLifecycle
 from apriori.flow.pipeline.types import (
-    Pipeline,
     PipelineConfigType,
     PipelineContextType,
     PipelineControlMessage,
-    PipelineExecutorProtocol,
     PipelineInputType,
     PipelineOutputType,
     PipelineResult,
-    Step,
-    StepWithLifeCycle,
+    PipelineType,
+    StepType,
 )
-from apriori.flow.progress.noop import NoOpProgress
+from apriori.flow.progress.progress_mixin import ProgressMixin
 from apriori.flow.progress.types import (
     HasProgress,
-    ProgressMixin,
 )
+from apriori.flow.structure import FlowStructure, HasFlowStructure
 
 
 @final
@@ -25,23 +25,24 @@ class PipelineExecutor(
         PipelineConfigType, PipelineContextType, PipelineInputType, PipelineOutputType
     ],
     ProgressMixin,  # Add progress support
+    HasLifecycle,  # Implements lifecycle support
+    HasFlowStructure,  # Implements flow structure support
 ):
-    __slots__ = ("_task", "pipeline")
+    __slots__ = ("pipeline", "context", "_prepared")
 
-    pipeline: Pipeline[PipelineConfigType, PipelineInputType, PipelineOutputType]
+    pipeline: PipelineType
     context: PipelineContextType
-    _task: int | None
 
     def __init__(
         self,
-        pipeline: Pipeline[PipelineConfigType, PipelineInputType, PipelineOutputType],
+        pipeline: PipelineType,
         context: PipelineContextType,
     ) -> None:
         self.pipeline = pipeline
         self.context = context
-        self.progress = NoOpProgress()
-        self._task = None
         self._prepared = False
+
+    # Properties
 
     def __str__(self) -> str:
         return f"PipelineExecutor(pipeline={self.pipeline})"
@@ -49,7 +50,16 @@ class PipelineExecutor(
     def __repr__(self) -> str:
         return f"PipelineExecutor(pipeline={self.pipeline})"
 
-    # Lifecycle hooks
+    # Flow structure
+
+    def describe_structure(self) -> FlowStructure:
+        return FlowStructure(
+            name="PipelineExecutor",
+            type="executor",
+            children=[self.pipeline.describe_structure()],
+        )
+
+    # Lifecycle methods
 
     def prepare(self) -> None:
         """Create task to display progress for execution.
@@ -58,39 +68,40 @@ class PipelineExecutor(
         if self._prepared:
             return
 
-        # Create task for pipeline if not shared task is provided
-        if self.has_shared_task:
-            self._task = self.shared_task
-            self.progress.update(
-                self._task,
-                description=str(self.pipeline),
-                total=self.pipeline.num_steps,
-                completed=0,
-            )
-        else:
-            self._task = self.progress.add_task(
-                description=str(self.pipeline),
-                total=self.pipeline.num_steps,
-                completed=0,
-            )
+        # Set default structure
+        if self.task_structure == "undefined":
+            self.enable_task_tree_structure()
+
+        self.prepare_task(
+            description=str(self.pipeline),
+            total=self.pipeline.num_steps,
+        )
 
         # Share progress and task for all steps
-        self._attach_progress_to_steps(
+        self._prepare_steps(
             self.pipeline.input_step,
             self.pipeline.output_step,
             *self.pipeline.steps,
         )
         self._prepared = True
 
-    def _attach_progress_to_steps(self, *steps: Step) -> None:
+    def _prepare_steps(self, *steps: StepType) -> None:
         for step in steps:
             if isinstance(step, HasProgress):
                 step.progress = self.progress
-                step.shared_task = self._task
+
+            if isinstance(step, ProgressMixin):
+                self.propagate_task_structure(
+                    instance=step,
+                    is_last_subtask=(step is steps[-1]),
+                )
+
+            if isinstance(step, HasLifecycle):
+                step.prepare()
 
     def on_cycle_start(self) -> None:
         # Note: this event may be triggered before the actual execution,
-        # e.g., by the runner that owns this executor, in order to reset progress before each iteration.
+        # e.g., by the runner that owns this executor - in order to reset progress before each iteration.
         self.progress.update(self._task, completed=0)
 
         # Call cycle start on steps that support life cycle
@@ -100,10 +111,10 @@ class PipelineExecutor(
             *self.pipeline.steps,
         )
 
-    def _steps_on_cycle_start(self, *steps: Step) -> None:
+    def _steps_on_cycle_start(self, *steps: StepType) -> None:
         for step in steps:
-            if isinstance(step, StepWithLifeCycle):
-                step.on_cycle_start(self.context)
+            if isinstance(step, HasLifecycle):
+                step.on_cycle_start()
 
     def on_cycle_end(self) -> None:
         # Call cycle end on steps that support life cycle
@@ -113,15 +124,29 @@ class PipelineExecutor(
             *self.pipeline.steps,
         )
 
-    def _steps_on_cycle_end(self, *steps: Step) -> None:
+    def _steps_on_cycle_end(self, *steps: StepType) -> None:
         for step in steps:
-            if isinstance(step, StepWithLifeCycle):
-                step.on_cycle_end(self.context)
+            if isinstance(step, HasLifecycle):
+                step.on_cycle_end()
 
     def cleanup(self):
         if not self._prepared:
             return
+
+        self.progress.remove_task(self._task)
+        self._task = None
+
+        self._steps_cleanup(
+            self.pipeline.input_step,
+            self.pipeline.output_step,
+            *self.pipeline.steps,
+        )
         self._prepared = False
+
+    def _steps_cleanup(self, *steps: StepType) -> None:
+        for step in steps:
+            if isinstance(step, HasLifecycle):
+                step.cleanup()
 
     # Main execution
 

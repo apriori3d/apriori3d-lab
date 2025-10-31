@@ -2,11 +2,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Generic, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from apriori.flow.pipeline.types import (
-    PipelineExecutorProtocol,
-    PipelineResult,
-)
-from apriori.flow.runner.lifecycle_mixin import LifecycleProtocol
+from apriori.flow.executor.types import PipelineExecutorProtocol
+from apriori.flow.pipeline.types import PipelineProtocol, PipelineResult
+from apriori.flow.structure import HasFlowStructure
 
 PipelineConfigType = TypeVar("PipelineConfigType")
 PipelineContextType = TypeVar("PipelineContextType")
@@ -15,17 +13,11 @@ PipelineOutputType = TypeVar("PipelineOutputType")
 RunnerInputType = TypeVar("RunnerInputType", bound=Iterable[PipelineInputType])
 
 
-@dataclass(slots=True)
-class RunnerResult(
-    Generic[PipelineOutputType,],
-):
-    input_index: int
-    pipeline_result: PipelineResult[PipelineOutputType]
+# Redefine a pipeline and executor type with local generic parameters
 
-
-RunnerResultType: TypeAlias = RunnerResult[PipelineOutputType]
-
-OnResultCallbackType: TypeAlias = Callable[[RunnerResultType], None]
+PipelineType: TypeAlias = PipelineProtocol[
+    PipelineConfigType, PipelineContextType, PipelineInputType, PipelineOutputType
+]
 
 # Define a type alias for the pipeline used in the runner for better readability
 PipelineExecutorType: TypeAlias = PipelineExecutorProtocol[
@@ -36,8 +28,25 @@ PipelineExecutorType: TypeAlias = PipelineExecutorProtocol[
 ]
 
 
+# Result type for runner execution
+@dataclass(slots=True)
+class RunnerResult(
+    Generic[PipelineOutputType],
+):
+    input_index: int
+    pipeline_result: PipelineResult[PipelineOutputType]
+
+
+RunnerResultType: TypeAlias = RunnerResult[PipelineOutputType]
+
+# Callback type for handling runner results
+
+OnResultCallbackType: TypeAlias = Callable[[RunnerResultType], None]
+
+# Define the main Runner Protocol
+
+
 class RunnerProtocol(
-    LifecycleProtocol,
     Generic[
         RunnerInputType,
         PipelineConfigType,
@@ -45,6 +54,7 @@ class RunnerProtocol(
         PipelineInputType,
         PipelineOutputType,
     ],
+    HasFlowStructure,
 ):
     input: RunnerInputType
     pipeline_executor: PipelineExecutorType
@@ -65,7 +75,15 @@ RunnerType: TypeAlias = RunnerProtocol[
 ]
 
 
-# Define a protocol for elements with nested runner to support pipeline hierarchies
+# Protocol for elements with nested runner
 @runtime_checkable
-class HasRunner(Protocol):
+class HasRunner(
+    Protocol[
+        RunnerInputType,
+        PipelineConfigType,
+        PipelineContextType,
+        PipelineInputType,
+        PipelineOutputType,
+    ]
+):
     runner: RunnerType

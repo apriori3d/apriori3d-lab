@@ -1,5 +1,6 @@
-from typing import Literal
+from typing import Any, Literal, cast
 
+from apriori.flow.progress.noop import NoOpProgress
 from apriori.flow.progress.types import ProgressProtocol
 
 TaskStructure = Literal["undefined", "tree", "inline", "hidden"]
@@ -29,6 +30,7 @@ class ProgressMixin:
         self._parent_task = None
         self._task = None
         self._is_last_subtask = None
+        self.progress = NoOpProgress()
 
     # Task preparation method
 
@@ -67,7 +69,7 @@ class ProgressMixin:
     # Task structure management methods
 
     def enable_task_tree_structure(
-        self, parent_task: int, is_last_subtask: bool
+        self, parent_task: int = None, is_last_subtask: bool = True
     ) -> None:
         self._task_structure = "tree"
         self._parent_task = parent_task
@@ -83,6 +85,30 @@ class ProgressMixin:
         self._task_structure = "hidden"
         self._parent_task = None
         self._task = None
+
+    def propagate_task_structure(
+        self, instance: Any, is_last_subtask: bool = True
+    ) -> None:
+        if not isinstance(self, ProgressMixin):
+            return
+        instance_progress = cast(ProgressMixin, instance)
+        instance_progress.progress = self.progress
+
+        # Create task structure based on runner's task structure
+        match self.task_structure:
+            case "undefined":
+                # Do not create task structure
+                pass
+            case "hidden":
+                instance_progress.disable_task_structure()
+            case "tree":
+                # Setup tree structure under runner task
+                instance_progress.enable_task_tree_structure(
+                    parent_task=self.task, is_last_subtask=is_last_subtask
+                )
+            case "inline":
+                # Use shared task from runner
+                instance_progress.enable_task_inline_structure(self.task)
 
     # Read-Only Properties
 

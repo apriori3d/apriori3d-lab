@@ -1,15 +1,11 @@
-from collections.abc import Sized
 from dataclasses import dataclass
-from typing import Generic, final
+from typing import final
 
 import torch
 
+from apriori.flow.lifecycle import HasLifecycle
 from apriori.flow.pipeline.types import PipelineControlMessage
-from apriori.flow.progress.console import ConsoleProgress
-from apriori.flow.progress.types import (
-    HasProgress,
-    ProgressMixin,
-)
+from apriori.flow.progress.progress_mixin import ProgressMixin
 from apriori.flow.runner.types import (
     HasRunner,
     OnResultCallbackType,
@@ -19,8 +15,11 @@ from apriori.flow.runner.types import (
     PipelineInputType,
     PipelineOutputType,
     RunnerInputType,
+    RunnerProtocol,
     RunnerResultType,
 )
+from apriori.flow.runner.utils import get_input_len_or_zero
+from apriori.flow.structure import HasFlowStructure
 
 
 @dataclass(slots=True)
@@ -35,34 +34,30 @@ class SequentialRunnerConfig:
 
 @final
 class SequentialRunner(
-    Generic[
+    RunnerProtocol[
         RunnerInputType,
         PipelineConfigType,
         PipelineContextType,
         PipelineInputType,
         PipelineOutputType,
     ],
+    HasLifecycle,  # Implement lifecycle methods
     ProgressMixin,  # Add progress support
+    HasFlowStructure,  #  Implement flow structure support
 ):
     __slots__ = (
-        "_on_pipeline_result",
-        "_pipeline_task",
-        "_prepared",
-        "_task",
         "config",
         "input",
-        "executor",
+        "pipeline_executor",
+        "on_result",
+        "_prepared",
     )
 
     config: SequentialRunnerConfig
     input: RunnerInputType
-    executor: PipelineExecutorType
-
-    # Internal state
-    _on_pipeline_result: OnResultCallbackType | None
+    pipeline_executor: PipelineExecutorType
+    on_result: OnResultCallbackType | None
     _prepared: bool
-    _task: int | None
-    _executor_task: int | None
 
     def __init__(
         self,
@@ -70,22 +65,13 @@ class SequentialRunner(
         input: RunnerInputType,
         executor: PipelineExecutorType,
         *,
-        on_pipeline_result: OnResultCallbackType | None = None,
+        on_result: OnResultCallbackType | None = None,
     ) -> None:
         self.config = config
         self.input = input
-        self.executor = executor
+        self.pipeline_executor = executor
+        self.on_result = on_result
         self._prepared = False
-        self._task = None
-        self._executor_task = None
-        self._on_pipeline_result = on_pipeline_result
-        self.progress = ConsoleProgress()  # Default progress
-
-    @property
-    def input_len(self) -> int | None:
-        if isinstance(self.input, Sized):
-            return len(self.input)
-        return None
 
     # Main execution
 
@@ -94,160 +80,87 @@ class SequentialRunner(
         self.on_cycle_start()
 
         for i, item in enumerate(self.input):
-            # Send cycle start to nested runners
-            for step in self.executor.pipeline.steps:
-                if isinstance(step, HasRunner):
-                    self._on_cycle_start(step.runner)
+            # Send cycle start event to executor
+            if isinstance(self.pipeline_executor, HasLifecycle):
+                self.pipeline_executor.on_cycle_start()
 
             # Run the pipeline
-            result = self.executor.run(item)
+            result = self.pipeline_executor.run(item)
 
             # Callback with the result if provided
-            if self._on_pipeline_result is not None:
-                self._on_pipeline_result(
+            if self.on_result is not None:
+                self.on_result(
                     RunnerResultType(
                         input_index=i,
                         pipeline_result=result,
                     ),
                 )
-
             self.progress.advance(self._task)
+
+            if isinstance(self.pipeline_executor, HasLifecycle):
+                self.pipeline_executor.on_cycle_end()
 
             # Stop execution if the pipeline requests to stop cycle
             if result.control is PipelineControlMessage.StopCycle:
-                if self.input_len is not None:
-                    self.progress.update(self._task, completed=self.input_len)
+                # Complete the progress for the runner
+                if input_len := get_input_len_or_zero(self.input) > 0:
+                    self.progress.update(self._task, completed=input_len)
                 break
 
-            # Send cycle end to nested runners
-            for step in self.executor.pipeline.steps:
-                if isinstance(step, HasRunner):
-                    self._on_cycle_end(step.runner)
-
         self.on_cycle_end()
-        self.progress.print(f"✅ {self.executor.pipeline} completed!")
+        self.progress.print(f"✅ {self.pipeline_executor.pipeline} completed!")
 
-    # lifecycle hooks
+    # lifecycle methods
 
     def prepare(self) -> None:
-        SequentialRunner._prepare(self)
-
-    def on_cycle_start(self) -> None:
-        SequentialRunner._on_cycle_start(self, nested=False)
-
-    def on_cycle_end(self) -> None:
-        SequentialRunner._on_cycle_end(self)
-
-    def cleanup(self) -> None:
-        SequentialRunner._cleanup(self)
-
-    @staticmethod
-    def _prepare(
-        runner: "SequentialRunner",
-        parent_task: int | None = None,
-        is_last_subtask: bool = True,
-    ) -> None:
-        if runner._prepared:
+        if self._prepared:
             return
 
-        if runner._shared_task is None:
-            # Add task for runner to progress tracker
-            runner._task = runner.progress.add_task(
-                str(runner.input),
-                total=runner.input_len,
-                completed=0,
-                parent_task=parent_task,
-                is_last_subtask=is_last_subtask,
-            )
-            # Add task for pipeline executor to progress tracker
-            runner._executor_task = runner.progress.add_task(
-                str(runner.executor.pipeline),
-                total=runner.executor.pipeline.num_steps,
-                completed=0,
-                parent_task=runner._task,  # Enable hierarchy
-                is_last_subtask=True,  # Pipeline is the only node under runner
-            )
-        else:
-            # Use single shared task
-            runner._task = runner._shared_task
-            runner._executor_task = runner._shared_task
+        # Set default structure
+        if self.task_structure == "undefined":
+            self.enable_task_tree_structure()
 
-        # Set progress to the pipeline executor
-        if isinstance(runner.executor, HasProgress):
-            runner.executor.progress = runner.progress
-            # To track progress for a pipeline as a single task,
-            # shared task being used for all steps in the pipeline.
-            runner.executor.shared_task = runner._executor_task
+        # Prepare runner task for progress tracking
+        self.prepare_task(
+            description=str(self.input), total=get_input_len_or_zero(self.input)
+        )
+
+        # Enable inline task structure for pipeline executor
+        if isinstance(self.pipeline_executor, ProgressMixin):
+            self.pipeline_executor.enable_task_inline_structure(self.task)
 
         # Prepare the pipeline executor
-        runner.executor.prepare()
+        self.pipeline_executor.prepare()
 
-        # Prepare nested runners in pipeline steps
-        nested_runners = [
-            step.runner
-            for step in runner.executor.pipeline.steps
-            if isinstance(step, HasRunner)
-        ]
-        for i, nested_runner in enumerate(nested_runners):
-            # Set progress to nested runner
-            nested_runner.progress = runner.progress
-            # Set flag to correctly format tree
-            is_last_subtask = ((i == len(nested_runners) - 1),)
-            # Prepare nested runner
-            SequentialRunner._prepare(
-                nested_runner,
-                parent_task=runner._executor_task,  # Set executor task as a parent
-                is_last_subtask=is_last_subtask,
-            )
-
-        runner._prepared = True
-
-    @staticmethod
-    def _on_cycle_start(runner: "SequentialRunner", nested: bool = False) -> None:
+    def on_cycle_start(self) -> None:
         # Reset progress for the runner task
-        runner.progress.update(runner._task, completed=0)
+        self.progress.update(self.task, completed=0)
 
-        # Send event to the pipeline executor
-        runner.executor.on_cycle_start()
+    def on_cycle_end(self) -> None:
+        pass
 
-        # Send event to nested runners in pipeline steps
-        if nested:
-            for step in runner.executor.pipeline.steps:
-                if isinstance(step, HasRunner):
-                    SequentialRunner._on_cycle_start(step.runner, nested=True)
-
-    @staticmethod
-    def _on_cycle_end(runner: "SequentialRunner", nested: bool = False) -> None:
-        # Send event to the pipeline executor
-        runner.executor.on_cycle_end()
-
-        # Send event to nested runners in pipeline steps
-        if nested:
-            for step in runner.executor.pipeline.steps:
-                if isinstance(step, HasRunner):
-                    SequentialRunner._on_cycle_end(step.runner, nested=True)
-
-    @staticmethod
-    def _cleanup(runner: "SequentialRunner") -> None:
-        if not runner._prepared:
+    def cleanup(self) -> None:
+        if not self._prepared:
             return
-        runner._prepared = False
+        self._prepared = False
 
         # Remove tasks from progress tracker
-        runner.progress.remove_task(runner._task)
-        runner.progress.remove_task(runner._executor_task)
-        runner._task = None
-        runner._executor_task = None
+        self.progress.remove_task(self._task)
+        self._task = None
 
         # Cleanup the pipeline executor
-        runner.executor.cleanup()
+        self.pipeline_executor.cleanup()
 
-        # Cleanup nested runners in pipeline steps
-        for step in runner.executor.pipeline.steps:
-            if isinstance(step, HasRunner):
-                SequentialRunner._cleanup(step.runner)
+    # Flow structure methods
 
-    # Unitility methods
+    def describe_structure(self) -> HasFlowStructure.FlowStructure:
+        return HasFlowStructure.FlowStructure(
+            name="SequentialRunner",
+            type="runner",
+            children=[self.pipeline_executor.describe_structure()],
+        )
+
+    # Utility methods
 
     def print_plan(self) -> None:
         self._prepare(self)
@@ -274,14 +187,16 @@ class SequentialRunner(
 
         # Print runner input and pipeline as nodes.
         runner.progress.print(f"{prefix}├──{repr(runner.input)}")
-        runner.progress.print(f"{prefix}└──{repr(runner.executor.pipeline)}")
+        runner.progress.print(f"{prefix}└──{repr(runner.pipeline_executor.pipeline)}")
 
         # Add indentation for pipeline steps.
         prefix = f"{prefix}   "
         # Print pipeline steps.
-        runner.progress.print(f"{prefix}├──{repr(runner.executor.pipeline.input_step)}")
+        runner.progress.print(
+            f"{prefix}├──{repr(runner.pipeline_executor.pipeline.input_step)}"
+        )
 
-        for step in runner.executor.pipeline.steps:
+        for step in runner.pipeline_executor.pipeline.steps:
             if isinstance(step, HasRunner) and isinstance(
                 step.runner, SequentialRunner
             ):
@@ -292,7 +207,7 @@ class SequentialRunner(
                 runner.progress.print(f"{prefix}├──{repr(step)}")
 
         runner.progress.print(
-            f"{prefix}└──{repr(runner.executor.pipeline.output_step)}"
+            f"{prefix}└──{repr(runner.pipeline_executor.pipeline.output_step)}"
         )
 
     # State management methods
