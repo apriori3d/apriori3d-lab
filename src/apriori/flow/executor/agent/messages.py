@@ -1,8 +1,8 @@
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import (
     Any,
     Generic,
-    Literal,
     Protocol,
     TypeVar,
     final,
@@ -13,29 +13,23 @@ from typing import (
 import torch
 
 from apriori.flow.pipeline.types import (
-    PipelineResult,
-)
-from apriori.flow.runner.types import (
     PipelineInputType,
     PipelineOutputType,
+    PipelineResult,
 )
 
 # ──── Literal-based message type definitions ────
 
-AgentRequestType = Literal[
-    "lifecycle",
-    "restore_state",
-    "run",
-]
-AgentResponseType = Literal[
-    "lifecycle_response",
-    "restore_state_response",
-    "run_response",
-]
 
-AgentEventType = Literal["fault",]
+class AgentMessageType(Enum):
+    lifecycle = auto()
+    lifecycle_response = auto()
+    restore_state = auto()
+    restore_state_response = auto()
+    run = auto()
+    run_response = auto()
+    fault = auto()
 
-AgentMessageType = AgentRequestType | AgentResponseType | AgentEventType
 
 # ──── Payload decorator ────
 
@@ -48,9 +42,6 @@ def message_payload(message: AgentMessageType):
     return wrapper
 
 
-# Mapping of payload classes to message types
-
-
 @runtime_checkable
 class SupportsAgentMessageType(Protocol):
     __agent_message_type__: AgentMessageType
@@ -59,54 +50,58 @@ class SupportsAgentMessageType(Protocol):
 # ──── Payload definitions ────
 
 
-PhasesType = Literal["prepare", "on_cycle_start", "on_cycle_end", "cleanup"]
+class LifecyclePhasesType(Enum):
+    prepare = auto()
+    on_cycle_start = auto()
+    on_cycle_end = auto()
+    cleanup = auto()
 
 
 @final
 @dataclass()
-@message_payload("lifecycle")
+@message_payload(AgentMessageType.lifecycle)
 class LifecyclePayload:
-    phase: PhasesType
+    phase: LifecyclePhasesType
 
 
 @final
 @dataclass()
-@message_payload("lifecycle_response")
+@message_payload(AgentMessageType.lifecycle_response)
 class LifecycleResponsePayload:
-    phase: PhasesType
+    phase: LifecyclePhasesType
 
 
 @final
 @dataclass()
-@message_payload("restore_state")
+@message_payload(AgentMessageType.restore_state)
 class RestoreStatePayload:
     state: dict[str, torch.Tensor]
 
 
 @final
 @dataclass()
-@message_payload("restore_state_response")
+@message_payload(AgentMessageType.restore_state_response)
 class RestoreStateResponsePayload:
     state: dict[str, torch.Tensor]
 
 
 @final
 @dataclass()
-@message_payload("run")
+@message_payload(AgentMessageType.run)
 class RunPayload(Generic[PipelineInputType]):
-    items: list[PipelineInputType]
+    item: PipelineInputType
 
 
 @final
 @dataclass()
-@message_payload("run_response")
+@message_payload(AgentMessageType.run_response)
 class RunResponsePayload(Generic[PipelineOutputType]):
-    result: list[PipelineResult[PipelineOutputType]]
+    result: PipelineResult[PipelineOutputType]
 
 
 @final
 @dataclass()
-@message_payload("fault")
+@message_payload(AgentMessageType.fault)
 class AgentFaultPayload:
     error: str
 
@@ -124,7 +119,7 @@ class AgentMessage(Generic[PayloadT]):
     payload: PayloadT
 
 
-# ──── Factory methods with type hints ────
+# ──── Message factory methods with type hints ────
 
 
 @overload

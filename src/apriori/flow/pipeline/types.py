@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Generic, Protocol, TypeAlias, TypeVar
 
-# Generic type variables for Pipeline
+# ──── Generic type variables for Pipeline ────
 
 PipelineConfigType = TypeVar("PipelineConfigType")
 PipelineContextType = TypeVar("PipelineContextType")
@@ -10,13 +10,13 @@ PipelineInputType = TypeVar("PipelineInputType")
 PipelineOutputType = TypeVar("PipelineOutputType")
 
 
-# Control messages for pipeline execution flow
+# ──── Control messages for pipeline execution flow ────
 class PipelineControlMessage(Enum):
     Continue = auto()
     StopCycle = auto()
 
 
-# Steps Protocols and Type Aliases
+# ──── Steps Protocols and Type Aliases ────
 
 
 class InputStepProtocol(
@@ -52,7 +52,7 @@ OutputStepType: TypeAlias = OutputStepProtocol[
 ]
 
 
-# Pipeline Protocol
+# ──── Pipeline Protocol ────
 
 
 class PipelineProtocol(
@@ -67,24 +67,19 @@ class PipelineProtocol(
     output_step: OutputStepType
     num_steps: int
 
+    def all_steps(self) -> list[StepType]:
+        """Return all steps including input and output steps."""
+        return [self.input_step] + self.steps + [self.output_step]
+
 
 PipelineType: TypeAlias = PipelineProtocol[
     PipelineConfigType, PipelineContextType, PipelineInputType, PipelineOutputType
 ]
+
+# ──── Pipeline Result container ────
 
 
 @dataclass(slots=True)
 class PipelineResult(Generic[PipelineOutputType]):
     output: PipelineOutputType
     control: PipelineControlMessage
-
-
-# @runtime_checkable
-# class HasState(Protocol):
-#     def get_state(self) -> dict[str, torch.Tensor]:
-#         """Get the current state of the executor as a dictionary of tensors."""
-#         ...
-
-#     def load_state(self, state: dict[str, torch.Tensor]) -> None:
-#         """Load the executor state from a dictionary of tensors."""
-#         ...

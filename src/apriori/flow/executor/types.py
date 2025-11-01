@@ -1,15 +1,13 @@
-from typing import Generic, Protocol
+from typing import Generic, Protocol, TypeAlias
 
-from apriori.flow.lifecycle import HasLifecycle
 from apriori.flow.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineInputType,
     PipelineOutputType,
-    PipelineProtocol,
     PipelineResult,
+    PipelineType,
 )
-from apriori.flow.structure import HasFlowStructure
 
 
 class PipelineExecutorProtocol(
@@ -17,17 +15,19 @@ class PipelineExecutorProtocol(
     Generic[
         PipelineConfigType, PipelineContextType, PipelineInputType, PipelineOutputType
     ],
-    HasLifecycle,
-    HasFlowStructure,
 ):
-    pipeline: PipelineProtocol[
-        PipelineConfigType,
-        PipelineInputType,
-        PipelineOutputType,
-    ]
+    pipeline: PipelineType
     context: PipelineContextType
+
+    def __init__(self):
+        super().__init__()
 
     # Main execution method
     def run(self, input_data: PipelineInputType) -> PipelineResult[PipelineOutputType]:
         """Execute the pipeline with the given input data and return the result."""
         ...
+
+
+PipelineExecutorType: TypeAlias = PipelineExecutorProtocol[
+    PipelineConfigType, PipelineContextType, PipelineInputType, PipelineOutputType
+]
