@@ -35,7 +35,7 @@ from apriori.flow.structure import HasFlowStructure
 
 
 @final
-class ParallelRunner(
+class AgentPoolRunner(
     RunnerProtocol[
         RunnerInputType,
         PipelineConfigType,
@@ -327,7 +327,7 @@ class ParallelRunner(
         self.progress.print("🛑 All agents terminated after fault.")
 
 
-ParallelRunnerType: TypeAlias = ParallelRunner[
+ParallelRunnerType: TypeAlias = AgentPoolRunner[
     RunnerInputType,
     PipelineConfigType,
     PipelineContextType,
