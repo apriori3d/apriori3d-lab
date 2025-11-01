@@ -4,7 +4,19 @@ from typing import Any, Generic, TypeAlias, final
 
 from torch.multiprocessing import Queue
 
-from apriori.flow.executor.agent.messages import (
+from apriori.flow.core.executor.types import PipelineExecutorType
+from apriori.flow.core.pipeline.types import (
+    PipelineConfigType,
+    PipelineContextType,
+    PipelineInputType,
+    PipelineOutputType,
+)
+from apriori.flow.core.runner.types import (
+    RunnerInputType,
+    RunnerProtocol,
+)
+from apriori.flow.lifecycle import SupportsLifecycle
+from apriori.flow.pool.messages import (
     AgentFaultPayload,
     AgentMessage,
     AgentMessageType,
@@ -15,22 +27,10 @@ from apriori.flow.executor.agent.messages import (
     RunResponsePayload,
     create_message,
 )
-from apriori.flow.executor.types import PipelineExecutorType
-from apriori.flow.lifecycle import SupportsLifecycle
-from apriori.flow.pipeline.types import (
-    PipelineConfigType,
-    PipelineContextType,
-    PipelineInputType,
-    PipelineOutputType,
-)
 from apriori.flow.progress.progress_mixin import ProgressMixin
 from apriori.flow.progress.types import (
     HasProgress,
     SupportsProgressTask,
-)
-from apriori.flow.runner.types import (
-    RunnerInputType,
-    RunnerProtocol,
 )
 
 AgentRunnerType: TypeAlias = RunnerProtocol[
@@ -70,6 +70,8 @@ class ExecutorAgent(
     pipeline_executor: PipelineExecutorType
     request_queue: Queue
     response_queue: Queue
+    # For sending result data to a consumer process, if any
+    consumer_queue: Queue | None
 
     def __init__(
         self,
@@ -77,11 +79,15 @@ class ExecutorAgent(
         pipeline_executor: PipelineExecutorType,
         request_queue: Queue,
         response_queue: Queue,
+        consumer_queue: Queue | None = None,
     ):
         self.agent_id = agent_id
         self.pipeline_executor = pipeline_executor
         self.request_queue = request_queue
         self.response_queue = response_queue
+        self.consumer_queue = consumer_queue
+
+    # ──── Main loop ────
 
     def run_loop(self) -> None:
         # Process requests until a None request is received
@@ -101,7 +107,8 @@ class ExecutorAgent(
                 )
                 break  # Exit on error
 
-    # Main run method
+    # ────  Main run method ────
+
     def run(self, item: PipelineInputType) -> None:
         pipeline_result = self.pipeline_executor.run(item)
 
@@ -115,6 +122,8 @@ class ExecutorAgent(
                 RunResponsePayload(pipeline_result),
             )
         )
+
+    # ──── Message handling ────
 
     def _handle_message(self, message: AgentMessage[Any]) -> None:
         self.progress.print(f"Agent {self.agent_id} received message: {message.type}")
@@ -162,7 +171,7 @@ class ExecutorAgent(
         )
         self.run(payload.item)
 
-    # Lifecycle method: redirect lifecycle methods to pipeline executor
+    # ──── Lifecycle Support ────
 
     def prepare(self) -> None:
         # Redirect print to progress routine, because print interferes with rich.Progress

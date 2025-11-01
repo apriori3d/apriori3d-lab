@@ -1,6 +1,6 @@
 from typing import Generic, Protocol, TypeAlias
 
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineInputType,

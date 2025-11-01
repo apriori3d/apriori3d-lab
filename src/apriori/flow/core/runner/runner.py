@@ -3,24 +3,24 @@ from typing import cast, final
 
 import torch
 
-from apriori.flow.executor.types import PipelineExecutorType
-from apriori.flow.lifecycle import LifecycleMixin, SupportsLifecycle
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.executor.types import PipelineExecutorType
+from apriori.flow.core.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineControlMessage,
     PipelineInputType,
     PipelineOutputType,
 )
-from apriori.flow.progress.progress_mixin import ProgressMixin
-from apriori.flow.progress.types import SupportsProgressTask
-from apriori.flow.runner.types import (
+from apriori.flow.core.runner.types import (
     OnResultCallbackType,
     RunnerInputType,
     RunnerProtocol,
     RunnerResultType,
 )
-from apriori.flow.runner.utils import get_input_len_or_zero
+from apriori.flow.core.runner.utils import get_input_len_or_zero
+from apriori.flow.lifecycle import LifecycleMixin, SupportsLifecycle
+from apriori.flow.progress.progress_mixin import ProgressMixin
+from apriori.flow.progress.types import SupportsProgressTask
 from apriori.flow.structure import HasFlowStructure
 
 

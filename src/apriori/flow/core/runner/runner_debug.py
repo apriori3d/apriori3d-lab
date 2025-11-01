@@ -1,12 +1,12 @@
 from typing import TypeAlias
 
-from apriori.flow.executor.executor import PipelineExecutor
-from apriori.flow.pipeline.pipeline import Pipeline
-from apriori.flow.progress.rich.utils import create_progress
-from apriori.flow.runner.parallel.parallel_runner import (
+from apriori.flow.core.executor.executor import PipelineExecutor
+from apriori.flow.core.pipeline.pipeline import Pipeline
+from apriori.flow.core.runner.parallel.parallel_runner import (
     ParallelRunner,
     ParallelRunnerConfig,
 )
+from apriori.flow.progress.rich.utils import create_progress
 
 DebugPipelineConfig: TypeAlias = str
 DebugPipelineInput: TypeAlias = int

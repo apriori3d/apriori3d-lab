@@ -12,7 +12,8 @@ from typing import (
 
 import torch
 
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.pipeline.types import (
+    PipelineControlMessage,
     PipelineInputType,
     PipelineOutputType,
     PipelineResult,
@@ -28,6 +29,7 @@ class AgentMessageType(Enum):
     restore_state_response = auto()
     run = auto()
     run_response = auto()
+    run_response_consumed = auto()
     fault = auto()
 
 
@@ -97,6 +99,13 @@ class RunPayload(Generic[PipelineInputType]):
 @message_payload(AgentMessageType.run_response)
 class RunResponsePayload(Generic[PipelineOutputType]):
     result: PipelineResult[PipelineOutputType]
+
+
+@final
+@dataclass()
+@message_payload(AgentMessageType.run_response_consumed)
+class ResultConsumedAckPayload(Generic[PipelineOutputType]):
+    control: PipelineControlMessage
 
 
 @final

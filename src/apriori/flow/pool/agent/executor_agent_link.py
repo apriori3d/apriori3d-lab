@@ -4,27 +4,27 @@ from typing import Generic, TypeAlias, final
 
 from torch.multiprocessing import Process, Queue
 
-from apriori.flow.executor.agent.agent import ExecutorAgentType
-from apriori.flow.executor.agent.messages import (
-    LifecyclePayload,
-    LifecyclePhasesType,
-    RunPayload,
-    create_message,
-)
-from apriori.flow.executor.types import PipelineExecutorType
-from apriori.flow.lifecycle import SupportsLifecycle
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.executor.types import PipelineExecutorType
+from apriori.flow.core.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineInputType,
     PipelineOutputType,
 )
-from apriori.flow.progress.progress_mixin import ProgressMixin
-from apriori.flow.progress.progress_relay import ProgressRelay
-from apriori.flow.runner.types import (
+from apriori.flow.core.runner.types import (
     RunnerInputType,
     RunnerProtocol,
 )
+from apriori.flow.lifecycle import SupportsLifecycle
+from apriori.flow.pool.agent.executor_agent import ExecutorAgentType
+from apriori.flow.pool.messages import (
+    LifecyclePayload,
+    LifecyclePhasesType,
+    RunPayload,
+    create_message,
+)
+from apriori.flow.progress.progress_mixin import ProgressMixin
+from apriori.flow.progress.progress_relay import ProgressRelay
 
 AgentRunnerType: TypeAlias = RunnerProtocol[
     RunnerInputType,

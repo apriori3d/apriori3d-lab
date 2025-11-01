@@ -2,8 +2,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Generic, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from apriori.flow.executor.types import PipelineExecutorType
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.executor.types import PipelineExecutorType
+from apriori.flow.core.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineInputType,

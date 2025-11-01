@@ -1,6 +1,6 @@
 from collections.abc import Sized
 
-from apriori.flow.runner.types import RunnerInputType
+from apriori.flow.core.runner.types import RunnerInputType
 
 
 def get_input_len_or_zero(input: RunnerInputType) -> int:

@@ -1,8 +1,7 @@
 from typing import final
 
-from apriori.flow.executor.types import PipelineExecutorProtocol
-from apriori.flow.lifecycle import SupportsLifecycle
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.executor.types import PipelineExecutorProtocol
+from apriori.flow.core.pipeline.types import (
     PipelineConfigType,
     PipelineContextType,
     PipelineControlMessage,
@@ -11,12 +10,13 @@ from apriori.flow.pipeline.types import (
     PipelineResult,
     PipelineType,
 )
+from apriori.flow.core.runner.types import HasRunner
+from apriori.flow.lifecycle import SupportsLifecycle
 from apriori.flow.progress.progress_mixin import ProgressMixin
 from apriori.flow.progress.types import (
     HasProgress,
     SupportsProgressTask,
 )
-from apriori.flow.runner.types import HasRunner
 from apriori.flow.structure import FlowStructure, HasFlowStructure
 
 

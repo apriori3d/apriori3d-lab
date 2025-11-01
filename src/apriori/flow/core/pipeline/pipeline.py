@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from apriori.flow.pipeline.types import (
+from apriori.flow.core.pipeline.types import (
     InputStepType,
     OutputStepType,
     PipelineConfigType,
@@ -12,7 +12,6 @@ from apriori.flow.pipeline.types import (
 from apriori.flow.structure import FlowStructure, HasFlowStructure
 
 
-# Pipeline definition
 @dataclass(slots=True)
 class Pipeline(
     PipelineProtocol[PipelineConfigType, PipelineInputType, PipelineOutputType],
