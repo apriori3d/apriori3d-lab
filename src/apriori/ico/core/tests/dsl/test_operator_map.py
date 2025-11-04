@@ -1,10 +1,10 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.dsl import Operator
+from apriori.ico.core.operator import IcoOperator
 
 
 def test_map_applies_elementwise() -> None:
-    double = Operator[float, float](lambda x: x * 2)
+    double = IcoOperator[float, float](lambda x: x * 2)
     mapped = double.map()
 
     result = list(mapped([1, 2, 3]))
@@ -12,8 +12,8 @@ def test_map_applies_elementwise() -> None:
 
 
 def test_map_and_compose_chain() -> None:
-    double = Operator[float, float](lambda x: x * 2)
-    total = Operator[Iterable[float], float](lambda xs: sum(xs))
+    scale = IcoOperator[float, float](lambda x: x * 2)
+    total = IcoOperator[Iterable[float], float](lambda xs: sum(xs))
 
-    pipeline = double.map() >> total
+    pipeline = scale.map() >> total
     assert pipeline([1, 2, 3]) == 12
