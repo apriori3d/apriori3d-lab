@@ -22,6 +22,7 @@ class NodeType(Enum):
     step = auto()
     output = auto()
     runner = auto()
+    data = auto()
 
 
 # ─── Operator Protocol ───
