@@ -1,5 +1,5 @@
 from apriori.ico.core import IcoOperator, IcoPipeline
-from apriori.ico.core.lifecycle import (
+from apriori.ico.core.runtime.lifecycle import (
     IcoLifecycleEvent,
     IcoLifecycleMixin,
     IcoLifecycleState,

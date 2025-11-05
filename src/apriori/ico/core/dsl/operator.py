@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any, Generic, TypeVar, overload
 
-from apriori.ico.core.execution import IcoExecutionMixin
-from apriori.ico.core.lifecycle import IcoLifecycleMixin
+from apriori.ico.core.runtime.execution import IcoExecutionMixin
+from apriori.ico.core.runtime.lifecycle import IcoLifecycleMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
 # ──── Generic type variables for composition ────

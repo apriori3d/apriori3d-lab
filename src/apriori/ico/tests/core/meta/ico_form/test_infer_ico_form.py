@@ -6,7 +6,7 @@ from apriori.ico.core import (
     IcoSource,
     IcoStream,
 )
-from apriori.ico.core.ico_form import infer_ico_form
+from apriori.ico.core.meta.ico_form import infer_ico_form
 
 # ─── Operator ───
 

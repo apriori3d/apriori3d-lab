@@ -32,7 +32,7 @@ class IcoOperatorProtocol(Protocol[I, O]):
     """
 
     fn: Callable[[I], O]
-    name: str | None
+    name: str
     node_type: NodeType
     children: list[IcoOperatorProtocol[Any, Any]]
 

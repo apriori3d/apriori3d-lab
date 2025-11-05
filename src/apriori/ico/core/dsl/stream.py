@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Generic, final
 
-from apriori.ico.core.operator import (
+from apriori.ico.core.dsl.operator import (
     IcoOperator,
     wrap_operator,
 )

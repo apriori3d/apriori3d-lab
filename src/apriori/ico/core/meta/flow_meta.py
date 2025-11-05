@@ -4,9 +4,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, final
 
-from apriori.ico.core.execution import IcoExecutionState, SupportsIcoExecution
-from apriori.ico.core.ico_form import IcoForm
-from apriori.ico.core.lifecycle import IcoLifecycleState, SupportsIcoLifecycle
+from apriori.ico.core.meta.ico_form import IcoForm
+from apriori.ico.core.runtime.execution import IcoExecutionState, SupportsIcoExecution
+from apriori.ico.core.runtime.lifecycle import IcoLifecycleState, SupportsIcoLifecycle
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
 
@@ -27,13 +27,13 @@ class IcoFlowMeta:
 
     node_type: NodeType
     ico_form: IcoForm
-    name: str | None = None
+    name: str
     state: IcoLifecycleState | None = None
     exec_state: IcoExecutionState | None = None
     children: list[IcoFlowMeta] = field(default_factory=list)
 
     def __str__(self) -> str:
-        return self.name or self.node_type.name
+        return self.name
 
     def traverse(self) -> Iterator[IcoFlowMeta]:
         yield self

@@ -1,31 +1,32 @@
-from apriori.ico.core.execution import IcoExecutionMixin, IcoExecutionState
-from apriori.ico.core.flow_meta import IcoFlowMeta
-from apriori.ico.core.ico_form import IcoForm
-from apriori.ico.core.lifecycle import (
+from apriori.ico.core.dsl.operator import IcoOperator, wrap_operator
+from apriori.ico.core.dsl.pipeline import IcoPipeline
+from apriori.ico.core.dsl.process import IcoProcess
+from apriori.ico.core.dsl.source import IcoSource
+from apriori.ico.core.dsl.stream import IcoStream
+from apriori.ico.core.meta.flow_meta import IcoFlowMeta
+from apriori.ico.core.meta.ico_form import IcoForm
+from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
+from apriori.ico.core.runtime.lifecycle import (
     IcoLifecycleEvent,
     IcoLifecycleMixin,
     IcoLifecycleState,
     SupportsIcoLifecycle,
 )
-from apriori.ico.core.operator import IcoOperator, wrap_operator
-from apriori.ico.core.pipeline import IcoPipeline
-from apriori.ico.core.process import IcoProcess
-from apriori.ico.core.source import IcoSource
-from apriori.ico.core.stream import IcoStream
 from apriori.ico.core.types import NodeType
 
 __all__ = [
     # ─── Core types ───
     "NodeType",
-    # ─── Core operator hierarchy ───
+    # ─── ICO DSL operators  ───
     "IcoOperator",
     "IcoPipeline",
     "IcoProcess",
     "IcoStream",
     "IcoSource",
-    # ─── Flow representation ───
+    # ─── Meta ───
     "IcoForm",
     "IcoFlowMeta",
+    # ─── Runtime ───
     # ─── Lifecycle management ───
     "IcoLifecycleState",
     "IcoLifecycleEvent",
