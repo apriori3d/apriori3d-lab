@@ -6,19 +6,23 @@ from typing import Generic, final
 from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.types import C, I, IcoOperatorProtocol, NodeType, O
 
-# ──── Pipeline  ────
-
 
 @final
 class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]):
     """
-    A transformation flow following the ICO convention:
-        I → C → O
-          context: I → C
-          flow:   [C → C]
-          output:  C → O
+    A transformation pipeline following the ICO convention.
 
-    Each component can be any callable or nested operator.
+    ICO form:
+        I → C → O
+        context: I → C
+        body:    [C → C]
+        output:   C → O
+
+    Each component can be any callable or nested IcoOperator.
+
+    The `body` operates directly on the context `C`, possibly mutating it.
+    This allows stateful or iterative transformations (e.g. model updates,
+    accumulated metrics, cached buffers) within the same pipeline lifecycle.
 
     Example:
         >>> from apriori.ico.core import IcoOperator, IcoPipeline
@@ -27,46 +31,50 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
         >>> scale = IcoOperator(lambda x: x * 2)
         >>> to_string = IcoOperator(str)
 
-        >>> pipeline = IcoPipeline(context=to_float, flow=[scale], output=to_string)
-        >>> result = pipeline("21.5")
-        >>> print(result)
-        '43.0'
+        >>> pipeline = IcoPipeline(
+        ...     context=to_float,
+        ...     body=[scale],
+        ...     output=to_string,
+        ... )
+        >>> print(pipeline("21.0"))
+        '42.0'
 
-        # pipeline: pipeline
-        #   operator: to_float
-        #   operator: scale
-        #   operator: to_string
+        # ICO structure:
+        # pipeline
+        # ├── operator[to_float]
+        # ├── operator[scale]
+        # └── operator[to_string]
     """
 
-    __slots__ = ("context", "flow", "output")
+    __slots__ = ("context", "body", "output")
 
     context: IcoOperatorProtocol[I, C]
-    flow: Sequence[IcoOperatorProtocol[C, C]]
+    body: Sequence[IcoOperatorProtocol[C, C]]
     output: IcoOperatorProtocol[C, O]
 
     def __init__(
         self,
         context: IcoOperatorProtocol[I, C],
-        flow: Sequence[IcoOperatorProtocol[C, C]],
+        body: Sequence[IcoOperatorProtocol[C, C]],
         output: IcoOperatorProtocol[C, O],
     ):
-        def pipeline_fn(item: I) -> O:
-            ctx = context(item)
-            for step in flow:
-                ctx = step(ctx)
-            return output(ctx)
-
         super().__init__(
-            fn=pipeline_fn,
+            fn=self._run_pipeline,
             node_type=NodeType.pipeline,
-            children=[context] + list(flow) + [output],
+            children=[context] + list(body) + [output],
         )
         self.context = context
-        self.flow = flow
+        self.body = body
         self.output = output
 
+    def _run_pipeline(self, item: I) -> O:
+        ctx = self.context(item)
+        for step in self.body:
+            ctx = step(ctx)
+        return self.output(ctx)
+
     def __len__(self) -> int:
-        return len(self.flow)
+        return len(self.body)
 
     def __iter__(self) -> Iterator[IcoOperatorProtocol[C, C]]:
-        yield from self.flow
+        yield from self.body

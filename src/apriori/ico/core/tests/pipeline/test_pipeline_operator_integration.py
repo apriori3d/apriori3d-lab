@@ -8,7 +8,7 @@ def test_operator_wraps_pipeline() -> None:
     # Basic pipeline: float → float
     p = IcoPipeline[float, float, float](
         context=IcoOperator(lambda x: x + 1),
-        flow=[IcoOperator(lambda x: x * 2), IcoOperator(lambda x: x + 3)],
+        body=[IcoOperator(lambda x: x * 2), IcoOperator(lambda x: x + 3)],
         output=IcoOperator(lambda x: round(x, 2)),
     )
 
@@ -27,7 +27,7 @@ def test_pipeline_inside_map_operator() -> None:
     # Define a small pipeline that squares a number
     square_pipeline = IcoPipeline[int, int, int](
         context=IcoOperator(lambda x: x),
-        flow=[IcoOperator(lambda x: x * x)],
+        body=[IcoOperator(lambda x: x * x)],
         output=IcoOperator(lambda x: x),
     )
 
@@ -44,14 +44,14 @@ def test_nested_pipeline_composition() -> None:
     # First pipeline: scale and shift
     p1 = IcoPipeline[int, int, int](
         context=IcoOperator(lambda x: x + 1),
-        flow=[IcoOperator(lambda x: x * 3)],
+        body=[IcoOperator(lambda x: x * 3)],
         output=IcoOperator(lambda x: x),
     )
 
     # Second pipeline: convert to string
     p2 = IcoPipeline[int, str, str](
         context=IcoOperator(lambda x: f"[{x}]"),
-        flow=[IcoOperator(lambda s: s + "!")],
+        body=[IcoOperator(lambda s: s + "!")],
         output=IcoOperator(lambda s: s),
     )
 

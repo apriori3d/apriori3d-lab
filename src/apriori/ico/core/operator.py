@@ -11,37 +11,43 @@ I2 = TypeVar("I2")
 O2 = TypeVar("O2")
 
 
-# ─── Base Operator ───
+# ─── Operator Class ───
 class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
     """
-    A composable callable transformation: I → O.
+    An atomic transformation unit following the ICO convention.
 
-    The Operator is the atomic building block of the ICO flow.
-    It wraps any function `fn: I → O` and allows:
-      • functional composition: `a >> b` or `a | b`
-      • lazy mapping over iterables: `op.map()`
-      • hierarchical structure introspection (FlowStructure)
+    ICO form:
+        I → O
+        fn: I → O
+
+    An `IcoOperator` wraps a callable and provides:
+    • composable transformations via `>>` or `|`
+    • lazy mapping over iterables with `.map()`
+    • structured graph representation for flow inspection
+
+    Operators are the fundamental building blocks of ICO pipelines.
+    They can represent stateless or stateful transformations,
+    depending on the behavior of the wrapped callable.
 
     Example:
         >>> from apriori.ico import IcoOperator
 
-        # Define basic transformations
-        >>> to_float = IcoOperator(float, name="to_float")
-        >>> scale = IcoOperator(lambda x: x * 2, name="scale")
-        >>> to_str = IcoOperator(str, name="to_string")
+        >>> to_float = IcoOperator(float)
+        >>> scale = IcoOperator(lambda x: x * 2)
+        >>> to_str = IcoOperator(str)
 
-        # Compose them: I → O, O → O2, O2 → O3, I → O3
-        >>> composed = to_float >> scale >> to_str
-        >>> print(composed("21.5"))
-        '43.0'
+        # Compose: I → O → O2 → O3 == I → O3
+        >>> pipeline = to_float >> scale >> to_str
+        >>> print(pipeline("21.0"))
+        '42.0'
 
-        # Apply lazily over an iterable
+        # Lazy map over iterable
         >>> mapped = scale.map()
         >>> print(list(mapped([1, 2, 3])))
         [2, 4, 6]
 
         # Inspect flow
-        >>> flow = composed.describe_flow()
+        >>> flow = pipeline.describe_flow()
         >>> print(flow.name)
         to_float >> scale >> to_string
     """
@@ -73,7 +79,7 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
     # ─── Composition ───
 
     def compose(self, other: IcoOperatorProtocol[O, O2]) -> IcoOperator[I, O2]:
-        """Function composition: I → O, O → O2 → I → O2."""
+        """Function composition: (I → O, O → O2) == I → O2."""
 
         def composed(x: I) -> O2:
             return other(self(x))

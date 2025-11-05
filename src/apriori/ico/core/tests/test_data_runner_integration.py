@@ -4,7 +4,7 @@ from apriori.ico.core.data import IcoData
 from apriori.ico.core.flow import IcoFlow
 from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.pipeline import IcoPipeline
-from apriori.ico.core.runner import IcoRunner
+from apriori.ico.core.stream import IcoStream
 from apriori.ico.core.types import NodeType
 
 
@@ -42,13 +42,13 @@ def test_ico_integration_data_runner_pipeline() -> None:
     # ─────────────────────────────
     augment = IcoPipeline[float, float, float](
         context=to_context,
-        flow=[scale],
+        body=[scale],
         output=to_output,
     )
 
     collate = IcoPipeline[Iterable[float], Iterable[float], float](
         context=IcoOperator(list),
-        flow=[],
+        body=[],
         output=IcoOperator(max),
     )
 
@@ -57,7 +57,7 @@ def test_ico_integration_data_runner_pipeline() -> None:
     # ─────────────────────────────
     # 4. Wrap into runner and connect with data
     # ─────────────────────────────
-    runner = IcoRunner[Iterable[float], float](pipeline)
+    runner = IcoStream[Iterable[float], float](pipeline)
     data_flow = dataset >> runner
 
     # ─────────────────────────────
@@ -77,7 +77,7 @@ def test_ico_integration_data_runner_pipeline() -> None:
     # Compose should have two children: Data and Runner
     assert len(flow.children) == 2
     assert flow.children[0].node_type == NodeType.data
-    assert flow.children[1].node_type == NodeType.runner
+    assert flow.children[1].node_type == NodeType.stream
 
     # Runner should contain one child, the compose of map for augmentation over batch and collation
     runner_node = flow.children[1]

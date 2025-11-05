@@ -6,28 +6,23 @@ from typing import Generic, final
 from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
-# ──── Runner  ────
-
 
 @final
-class IcoRunner(
+class IcoStream(
     IcoOperator[Iterable[I], Iterable[O]],
     IcoOperatorProtocol[Iterable[I], Iterable[O]],
     Generic[I, O],
 ):
     """
-    A higher-order operator that maps a body operator over an iterable of inputs,
-    following the ICO convention:
+    Applies a body operator to each element in a data stream.
 
+    ICO form:
         Iterable[I] → Iterable[O]
-            body: I → O
-
-    The body itself can be any operator (e.g., a Pipeline, another Runner, etc.),
-    enabling nested execution graphs.
 
     Example:
-        runner = IcoRunner(IcoPipeline(...))
-        results = list(runner(dataset))
+        scale = IcoOperator[float, float](lambda x: x * 2)
+        stream = IcoStream(scale)
+        result = list(stream([1, 2, 3]))  # [2, 4, 6]
     """
 
     __slots__ = ("body",)
@@ -38,13 +33,13 @@ class IcoRunner(
         self,
         body: IcoOperatorProtocol[I, O],
     ):
-        def runner_fn(batch: Iterable[I]) -> Iterable[O]:
-            for item in batch:
-                yield self.body(item)
-
         super().__init__(
-            fn=runner_fn,
-            node_type=NodeType.runner,
+            fn=self._stream_items,
+            node_type=NodeType.stream,
             children=[body],
         )
         self.body = body
+
+    def _stream_items(self, items: Iterable[I]) -> Iterable[O]:
+        for item in items:
+            yield self.body(item)

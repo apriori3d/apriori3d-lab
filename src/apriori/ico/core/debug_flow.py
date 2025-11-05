@@ -4,7 +4,7 @@ from apriori.ico.core.data import IcoData
 from apriori.ico.core.flow import IcoFlow
 from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.pipeline import IcoPipeline
-from apriori.ico.core.runner import IcoRunner
+from apriori.ico.core.stream import IcoStream
 
 # ─────────────────────────────
 # 1. Define data source
@@ -31,11 +31,11 @@ dataset = IcoData[Iterable[float]](data_generator, name="dataset")
 
 augment = IcoPipeline[float, float, float](
     context=IcoOperator(lambda x: x),
-    flow=[IcoOperator(lambda x: x * 2)],
+    body=[IcoOperator(lambda x: x * 2)],
     output=IcoOperator(lambda x: x),
 )
 collate = IcoPipeline[Iterable[float], Iterable[float], float](
-    context=IcoOperator(list), flow=[], output=IcoOperator(max)
+    context=IcoOperator(list), body=[], output=IcoOperator(max)
 )
 
 # ─────────────────────────────
@@ -50,7 +50,7 @@ pipeline = augment.map() >> collate
 # a. Map the pipeline over batches of input data: Iterable[Iterable[I]] → Iterable[O2]
 # ─────────────────────────────
 
-runner = IcoRunner[Iterable[float], float](pipeline)
+runner = IcoStream[Iterable[float], float](pipeline)
 
 # ─────────────────────────────
 # 4. Execute the flow

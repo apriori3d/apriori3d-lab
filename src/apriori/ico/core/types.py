@@ -21,8 +21,9 @@ class NodeType(Enum):
     context = auto()
     step = auto()
     output = auto()
-    runner = auto()
+    stream = auto()
     data = auto()
+    process = auto()
 
 
 # ─── Operator Protocol ───
