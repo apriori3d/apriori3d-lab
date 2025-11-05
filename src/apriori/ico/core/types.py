@@ -10,20 +10,18 @@ I = TypeVar("I")  # noqa: E741
 C = TypeVar("C")
 O = TypeVar("O")  # noqa: E741
 
+
 # ─── Node Types ───
 
 
 class NodeType(Enum):
     operator = auto()
-    map = auto()
     compose = auto()
+    map = auto()
     pipeline = auto()
-    context = auto()
-    step = auto()
-    output = auto()
     stream = auto()
-    data = auto()
     process = auto()
+    source = auto()
 
 
 # ─── Operator Protocol ───

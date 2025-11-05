@@ -35,11 +35,13 @@ class IcoStream(
     def __init__(
         self,
         body: Callable[[I], O],
+        name: str | None = None,
     ):
         body_op = wrap_operator(body)
 
         super().__init__(
             fn=self._stream_items,
+            name=name or f"IcoStream[{body_op.name}]",
             node_type=NodeType.stream,
             children=[body_op],
         )

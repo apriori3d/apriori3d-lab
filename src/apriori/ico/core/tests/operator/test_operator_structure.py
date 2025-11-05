@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core import IcoFlow, IcoOperator, NodeType
+from apriori.ico.core import IcoFlowMeta, IcoOperator, NodeType
 
 
 def test_operator_structure_builds_correct_tree() -> None:
@@ -38,7 +38,7 @@ def test_operator_structure_builds_correct_tree() -> None:
     # ─────────────────────────────
     # 4. Retrieve and inspect structural description
     # ─────────────────────────────
-    flow = IcoFlow.from_operator(pipeline)
+    flow = IcoFlowMeta.from_operator(pipeline)
 
     # Root node — composition
     assert flow.node_type == NodeType.compose
@@ -78,7 +78,7 @@ def test_operator_structure_builds_correct_tree() -> None:
     ]
 
 
-def _collect_names(node: IcoFlow) -> list[str]:
+def _collect_names(node: IcoFlowMeta) -> list[str]:
     """Recursively traverse an IcoFlow and collect node names."""
     result = [node.name]
     for child in node.children:

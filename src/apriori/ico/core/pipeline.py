@@ -60,6 +60,7 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
         context: Callable[[I], C],
         body: Sequence[Callable[[C], C]],
         output: Callable[[C], O],
+        name: str | None = None,
     ):
         # Wrap all components into IcoOperators if needed
         context_op = wrap_operator(context)
@@ -68,6 +69,7 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
 
         super().__init__(
             fn=self._run_pipeline,
+            name=name or "IcoPipeline",
             node_type=NodeType.pipeline,
             children=[context_op] + body_ops + [output_op],
         )

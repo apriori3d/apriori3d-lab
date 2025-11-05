@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core import IcoFlow, IcoOperator, IcoStream, NodeType
+from apriori.ico.core import IcoFlowMeta, IcoOperator, IcoStream, NodeType
 
 
 def test_stream_maps_operator_over_iterable() -> None:
@@ -45,7 +45,7 @@ def test_stream_structure_representation() -> None:
     scale = IcoOperator[int, int](lambda x: x * 2, name="scale")
     stream = IcoStream[int, int](body=scale)
 
-    flow = IcoFlow.from_operator(stream)
+    flow = IcoFlowMeta.from_operator(stream)
 
     # Root node should be a stream
     assert flow.node_type == NodeType.stream

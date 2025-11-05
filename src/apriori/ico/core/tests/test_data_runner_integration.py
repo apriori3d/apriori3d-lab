@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 
 from apriori.ico.core import (
-    IcoFlow,
+    IcoFlowMeta,
     IcoOperator,
     IcoPipeline,
     IcoSource,
@@ -71,14 +71,14 @@ def test_ico_integration_data_runner_pipeline() -> None:
     # ─────────────────────────────
     # 6. Validate flow structure
     # ─────────────────────────────
-    flow = IcoFlow.from_operator(data_flow)
+    flow = IcoFlowMeta.from_operator(data_flow)
 
     # Root should be compose node
     assert flow.node_type == NodeType.compose
 
     # Compose should have two children: Data and Runner
     assert len(flow.children) == 2
-    assert flow.children[0].node_type == NodeType.data
+    assert flow.children[0].node_type == NodeType.source
     assert flow.children[1].node_type == NodeType.stream
 
     # Runner should contain one child, the compose of map for augmentation over batch and collation
@@ -108,9 +108,3 @@ def test_ico_integration_data_runner_pipeline() -> None:
     assert len(collate_node.children) == 2
     for node in collate_node.children:
         assert node.node_type == NodeType.operator
-
-    # ─────────────────────────────
-    # 7. Print structure for manual inspection
-    # ─────────────────────────────
-    print(flow.describe())
-    print("✅ ICO integration test passed")

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
-from typing import Generic
+from typing import Generic, Protocol, runtime_checkable
 
 from apriori.ico.core.types import I, O
 
+# ──── Execution States ────
+
 
 class IcoExecutionState(Enum):
-    """Local, runtime-level execution state of an operator."""
+    """Local, runtime-level execution state of an ICO operator."""
 
     idle = auto()
     running = auto()
@@ -16,15 +18,30 @@ class IcoExecutionState(Enum):
     faulted = auto()
 
 
+# ──── Protocol for execution-capable operators ────
+
+
+@runtime_checkable
+class SupportsIcoExecution(Protocol):
+    """Protocol for operators that support runtime execution tracking."""
+
+    exec_state: IcoExecutionState
+
+
+# ──── Execution Mixin ────
+
+
 class IcoExecutionMixin(Generic[I, O]):
     """
     Mixin for tracking and reacting to an operator's execution state.
 
-    Emits execution events via `on_exec_event(state)` at each transition.
+    Provides a unified mechanism to:
+      • track operator progress (`idle → running → done / faulted`)
+      • emit events via `on_exec_event(state)` at each transition
 
     Example:
         >>> class DebugOp(IcoExecutionMixin[int, int]):
-        ...     def on_exec_event(self, state):  # optional hook
+        ...     def on_exec_event(self, state):
         ...         print(f"State changed to: {state.name}")
         ...     def __call__(self, x: int) -> int:
         ...         return self.track(lambda v: v * 2, x)
@@ -43,7 +60,7 @@ class IcoExecutionMixin(Generic[I, O]):
     # ─── Execution tracking ───
 
     def track(self, fn: Callable[[I], O], item: I) -> O:
-        """Execute fn(item) while updating state and emitting events."""
+        """Execute fn(item) while updating internal state."""
         self._set_state(IcoExecutionState.running)
         try:
             result = fn(item)
@@ -54,12 +71,13 @@ class IcoExecutionMixin(Generic[I, O]):
             self._set_state(IcoExecutionState.done)
             return result
 
-    # ─── Event handling ───
+    # ─── Event hooks ───
 
     def _set_state(self, state: IcoExecutionState) -> None:
+        """Internal helper to update state and trigger event callback."""
         self.exec_state = state
         self.on_exec_event(state)
 
     def on_exec_event(self, state: IcoExecutionState) -> None:
-        """Optional hook called on each execution state change."""
+        """Optional hook for subclasses to react to execution events."""
         pass

@@ -7,37 +7,33 @@ from apriori.ico.core.types import IcoOperatorProtocol, NodeType, O
 
 @final
 class IcoSource(
-    IcoOperator[None, Iterable[O]], IcoOperatorProtocol[None, Iterable[O]], Generic[O]
+    IcoOperator[None, Iterable[O]],
+    IcoOperatorProtocol[None, Iterable[O]],
+    Generic[O],
 ):
     """
     A data source node in the ICO DSL.
     Produces data without requiring any input (acts as `() → Iterable[O]`).
 
-    Typically used as the input of an ICO flow.
-
     Example:
-        |> from apriori.ico.core import IcoSource, IcoOperator, IcoStream
+        >>> dataset = IcoSource(lambda: [1.0, 2.0, 3.0], name="dataset")
+        >>> scale = IcoOperator(lambda x: x * 2, name="scale")
+        >>> to_sum = IcoOperator(sum, name="sum")
 
-        |> dataset = IcoSource(lambda: [1.0, 2.0, 3.0], name="dataset")
-        |> scale = IcoOperator(lambda x: x * 2, name="scale")
-        |> to_sum = IcoOperator(sum, name="sum")
-
-        |> flow = dataset | IcoStream(body=scale) | to_sum
-
-        # Sources are called without arguments
-        |> result = flow()
-        |> print(result)
+        >>> flow = dataset | IcoStream(body=scale) | to_sum
+        >>> result = flow()
+        >>> print(result)
         12.0
-
-        # dataset: data
-        #   operator: scale
-        #   operator: sum
     """
 
     def __init__(self, fn: Callable[[], Iterable[O]], name: str | None = None):
+        # Note: we annotate the inner lambda explicitly to preserve type hints
+        def wrapped(_: None) -> Iterable[O]:
+            return fn()
+
         super().__init__(
-            fn=lambda _: fn(),  # () → Iterable[O]
-            name=name,
-            node_type=NodeType.data,
+            fn=wrapped,
+            name=name or f"IcoSource[{str(fn)}]",
+            node_type=NodeType.source,
             children=[],
         )

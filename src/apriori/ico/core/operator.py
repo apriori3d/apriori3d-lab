@@ -64,7 +64,7 @@ class IcoOperator(
     fn: Callable[[I], O]
 
     # -── Flow introspection ───
-    name: str | None
+    name: str
     node_type: NodeType
     children: list[IcoOperatorProtocol[Any, Any]]
 
@@ -76,9 +76,16 @@ class IcoOperator(
         children: list[IcoOperatorProtocol[Any, Any]] | None = None,
     ):
         self.fn = fn
-        self.name = name
+        self.name = name or f"IcoOperator[{str(self.fn)}]"
         self.node_type = node_type
         self.children = children if children is not None else []
+
+    # ─── Properties ───
+
+    def __str__(self) -> str:
+        return self.name
+
+    # ─── Operator execution ───
 
     @overload
     def __call__(self, item: I) -> O:
@@ -127,18 +134,16 @@ class IcoOperator(
         Iterable[I] → Iterable[O]
         """
 
-        def map_fn(xs: Iterable[I]) -> Iterable[O]:
-            for x in xs:
-                yield self(x)
-
         return IcoOperator(
-            fn=map_fn,
+            fn=self._map_fn,
             name=f"{self.name}.map",
             node_type=NodeType.map,
             children=[self],
         )
 
-    # ─── Life cycle ───
+    def _map_fn(self, xs: Iterable[I]) -> Iterable[O]:
+        for x in xs:
+            yield self(x)
 
 
 def wrap_operator(

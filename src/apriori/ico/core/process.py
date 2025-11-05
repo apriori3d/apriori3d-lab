@@ -45,11 +45,13 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
         self,
         body: Callable[[C], C],
         num_iterations: int,
+        name: str | None = None,
     ):
         body_op = wrap_operator(body)
 
         super().__init__(
             fn=self._run_loop,
+            name=name or f"IcoProcess[{body_op.name} x {num_iterations}]",
             node_type=NodeType.process,
             children=[body_op],
         )

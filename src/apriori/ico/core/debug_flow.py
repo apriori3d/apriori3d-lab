@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.flow import IcoFlow
+from apriori.ico.core.flow_meta import IcoFlowMeta
 from apriori.ico.core.pipeline import IcoPipeline
 from apriori.ico.core.source import IcoSource
 from apriori.ico.core.stream import IcoStream
@@ -62,6 +62,6 @@ assert result == [6, 12, 18]  # Max of each batch after augmentation
 # ─────────────────────────────
 # 4. Retrieve and inspect structural description
 # ─────────────────────────────
-flow = IcoFlow.from_operator(data_flow)
+flow = IcoFlowMeta.from_operator(data_flow)
 print(flow.describe())
 print("Done")
