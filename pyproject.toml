@@ -1,5 +1,6 @@
 [project]
 name = "apriori3d-lab"
+requires-python = ">=3.10,<3.11"
 description = "Experimental geometry tools and notebooks for 3D reconstruction."
 version = "0.1.0"
 
@@ -9,6 +10,8 @@ packages = [
     { include = "apriori/geometry", from = "src" },
 ]
 
+[tool.poetry.dependencies]
+mypy = "^1.18.2"
 [tool.ruff]
 line-length = 88
 target-version = "py310"
@@ -24,3 +27,14 @@ indent-style = "space"
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # allow unused imports in __init__
+
+[tool.mypy]
+mypy_path = "src"
+strict = true
+namespace_packages = true
+explicit_package_bases = true
+
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+addopts = "-v"
