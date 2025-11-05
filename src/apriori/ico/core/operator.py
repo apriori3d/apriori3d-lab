@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any, Generic, TypeVar, overload
 
+from apriori.ico.core.execution import IcoExecutionMixin
+from apriori.ico.core.lifecycle import IcoLifecycleMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
 # ──── Generic type variables for composition ────
@@ -12,7 +14,12 @@ O2 = TypeVar("O2")
 
 
 # ─── Operator Class ───
-class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
+class IcoOperator(
+    IcoOperatorProtocol[I, O],
+    Generic[I, O],
+    IcoLifecycleMixin,  # Added lifecycle management
+    IcoExecutionMixin[I, O],  # Added execution state tracking
+):
     """
     An atomic transformation unit following the ICO convention.
 
@@ -56,7 +63,7 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
 
     fn: Callable[[I], O]
 
-    # -── Structure ───
+    # -── Flow introspection ───
     name: str | None
     node_type: NodeType
     children: list[IcoOperatorProtocol[Any, Any]]
@@ -86,10 +93,10 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
     def __call__(self, item: I | None = None, *args: Any) -> O:
         if item is not None:
             # Call for standard operator with input
-            return self.fn(item)
+            return self.track(self.fn, item)
 
         # Call for IcoSource with no input
-        return self.fn(None)  # type: ignore
+        return self.track(self.fn, None)  # type: ignore
 
     # ─── Composition ───
 
@@ -130,6 +137,8 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
             node_type=NodeType.map,
             children=[self],
         )
+
+    # ─── Life cycle ───
 
 
 def wrap_operator(

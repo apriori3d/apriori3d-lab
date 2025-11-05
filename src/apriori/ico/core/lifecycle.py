@@ -1,52 +1,100 @@
-# Lifecycle protocol
-from typing import Protocol, runtime_checkable
+from __future__ import annotations
+
+from enum import Enum, auto
+from typing import Any, Protocol, runtime_checkable
+
+from apriori.ico.core.types import IcoOperatorProtocol
+
+# ──── Lifecycle Events & States ────
+
+
+class IcoLifecycleEvent(Enum):
+    """Discrete lifecycle events broadcast through the ICO operator tree."""
+
+    prepare = auto()  # Initialize or allocate resources
+    reset = auto()  # Reset internal state for stateful operators (weights, cache, etc.)
+    cleanup = auto()  # Release resources and temporary buffers
+
+
+class IcoLifecycleState(Enum):
+    """Declarative lifecycle state of an ICO operator."""
+
+    unknown = auto()  # Default state (uninitialized)
+    prepared = auto()  # Operator initialized and ready to start work
+    ready = auto()  # Operator actively usable (after reset)
+    cleaned = auto()  # Operator has released all resources
+
+
+# ──── Mapping between events and resulting states ────
+
+EVENT_TO_STATE = {
+    IcoLifecycleEvent.prepare: IcoLifecycleState.prepared,
+    IcoLifecycleEvent.reset: IcoLifecycleState.ready,
+    IcoLifecycleEvent.cleanup: IcoLifecycleState.cleaned,
+}
+
+
+# ──── Protocol for lifecycle-capable operators ────
 
 
 @runtime_checkable
-class SupportsLifecycle(Protocol):
-    def prepare(self) -> None:
-        """Prepare the component before execution.
+class SupportsIcoLifecycle(Protocol):
+    """
+    Interface for operators that react to lifecycle events.
 
-        This may include resource allocation, initialization,
-        or any setup required for the component to function correctly.
-        """
-        ...
+    Each implementing operator should:
+      • maintain a `.state` field (of type IcoLifecycleState)
+      • implement `.on_event(event)` to handle incoming lifecycle events
 
-    def on_cycle_start(self) -> None:
-        """Signal the start of a processing cycle.
+    Lifecycle events are typically propagated using `IcoLifecycleMixin.broadcast_event()`.
+    """
 
-        Cycle definition depends on the context:
-        - For runners: one full iteration over the input set.
-        - For pipeline executors: processing a single input item.
-        - For pipeline steps: a single call with a context.
-        """
-        ...
+    state: IcoLifecycleState
 
-    def on_cycle_end(self) -> None:
-        """Called at the end of a cycle for post-processing or finalization."""
-        ...
-
-    def cleanup(self) -> None:
-        """Release resources allocated during prepare or execution."""
-        ...
+    def on_event(self, event: IcoLifecycleEvent) -> None: ...
 
 
-class LifecycleMixin:
-    """Mixin class providing default no-op implementations of lifecycle methods."""
+# ──── Lifecycle mixin (event broadcaster) ────
 
-    _prepared: bool
+
+class IcoLifecycleMixin:
+    """
+    Utility mixin for propagating lifecycle events through an ICO operator tree.
+
+    This mixin implements a minimal default behavior:
+      • each lifecycle event updates the operator's `.state`
+      • events are recursively broadcast to child operators
+
+    Example:
+        >>> from apriori.ico.core.lifecycle import IcoLifecycleMixin, IcoLifecycleEvent
+        >>> IcoLifecycleMixin.broadcast_event(pipeline, IcoLifecycleEvent.prepare)
+    """
+
+    state: IcoLifecycleState
 
     def __init__(self) -> None:
-        self._prepared = False
+        super().__init__()
+        self.state = IcoLifecycleState.unknown
 
-    def prepare(self) -> None:
-        pass
+    def on_event(self, event: IcoLifecycleEvent) -> None:
+        """Default no-op handler for lifecycle events. Override in subclasses if needed."""
+        return None
 
-    def on_cycle_start(self) -> None:
-        pass
+    @staticmethod
+    def broadcast_event(
+        operator: IcoOperatorProtocol[Any, Any],
+        event: IcoLifecycleEvent,
+    ) -> None:
+        """
+        Recursively propagate a lifecycle event through the operator tree.
 
-    def on_cycle_end(self) -> None:
-        pass
+        Each node implementing `SupportsIcoLifecycle`:
+          • receives the event via `.on_event(event)`
+          • updates its `.state` according to EVENT_TO_STATE
+        """
+        if isinstance(operator, SupportsIcoLifecycle):
+            operator.on_event(event)
+            operator.state = EVENT_TO_STATE.get(event, operator.state)
 
-    def cleanup(self) -> None:
-        pass
+        for child in getattr(operator, "children", []):
+            IcoLifecycleMixin.broadcast_event(child, event)

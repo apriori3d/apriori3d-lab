@@ -1,4 +1,10 @@
+from apriori.ico.core.execution import IcoExecutionMixin, IcoExecutionState
 from apriori.ico.core.flow import IcoFlow
+from apriori.ico.core.lifecycle import (
+    IcoLifecycleEvent,
+    IcoLifecycleMixin,
+    SupportsIcoLifecycle,
+)
 from apriori.ico.core.operator import IcoOperator, wrap_operator
 from apriori.ico.core.pipeline import IcoPipeline
 from apriori.ico.core.process import IcoProcess
@@ -17,6 +23,13 @@ __all__ = [
     "IcoSource",
     # Flow representation
     "IcoFlow",
+    # Lifecycle management
+    "IcoLifecycleEvent",
+    "IcoLifecycleMixin",
+    "SupportsIcoLifecycle",
+    # Execution tracking
+    "IcoExecutionMixin",
+    "IcoExecutionState",
     # Utility functions
     "wrap_operator",
 ]

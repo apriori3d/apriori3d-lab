@@ -1,7 +1,6 @@
 from collections.abc import Iterable
 
 from apriori.ico.core.flow import IcoFlow
-from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.pipeline import IcoPipeline
 from apriori.ico.core.source import IcoSource
 from apriori.ico.core.stream import IcoStream
@@ -30,12 +29,12 @@ dataset = IcoSource[Iterable[float]](data_generator, name="dataset")
 # ─────────────────────────────
 
 augment = IcoPipeline[float, float, float](
-    context=IcoOperator(lambda x: x),
-    body=[IcoOperator(lambda x: x * 2)],
-    output=IcoOperator(lambda x: x),
+    context=lambda x: x,
+    body=[lambda x: x * 2],
+    output=lambda x: x,
 )
 collate = IcoPipeline[Iterable[float], Iterable[float], float](
-    context=IcoOperator(list), body=[], output=IcoOperator(max)
+    context=list, body=[], output=max
 )
 
 # ─────────────────────────────
