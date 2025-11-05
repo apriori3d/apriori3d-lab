@@ -1,9 +1,9 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.data import IcoData
 from apriori.ico.core.flow import IcoFlow
 from apriori.ico.core.operator import IcoOperator
 from apriori.ico.core.pipeline import IcoPipeline
+from apriori.ico.core.source import IcoSource
 from apriori.ico.core.stream import IcoStream
 
 # ─────────────────────────────
@@ -21,7 +21,7 @@ def data_generator() -> Iterable[Iterable[float]]:
     yield from data
 
 
-dataset = IcoData[Iterable[float]](data_generator, name="dataset")
+dataset = IcoSource[Iterable[float]](data_generator, name="dataset")
 
 # ─────────────────────────────
 # 2. Define data processing elements
@@ -43,7 +43,7 @@ collate = IcoPipeline[Iterable[float], Iterable[float], float](
 # a. Map augmentation over input data: Iterable[I] → Iterable[O]
 # b. Collate augmented results: Iterable[O] → O2
 # ─────────────────────────────
-pipeline = augment.map() >> collate
+pipeline = augment.map() | collate
 
 # ─────────────────────────────
 # 4. Add runner layer
@@ -55,7 +55,7 @@ runner = IcoStream[Iterable[float], float](pipeline)
 # ─────────────────────────────
 # 4. Execute the flow
 # ─────────────────────────────
-data_flow = dataset >> runner
+data_flow = dataset | runner
 result = data_flow(None)
 result = list(result)
 assert result == [6, 12, 18]  # Max of each batch after augmentation

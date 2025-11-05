@@ -1,8 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.flow import IcoFlow
-from apriori.ico.core.operator import IcoOperator
-from apriori.ico.core.types import NodeType
+from apriori.ico.core import IcoFlow, IcoOperator, NodeType
 
 
 def test_operator_structure_builds_correct_tree() -> None:
@@ -11,9 +9,9 @@ def test_operator_structure_builds_correct_tree() -> None:
     correctly build a hierarchical IcoFlow structure.
 
     The tested dataflow:
-        augment.map() >> collate
+        augment.map() | collate
     corresponds to:
-        Iterable[float] ──▶ Iterable[float] ──▶ float
+        Iterable[float] → Iterable[float] → float
 
     Steps:
         1. augment: multiply each element by 2
@@ -29,7 +27,7 @@ def test_operator_structure_builds_correct_tree() -> None:
     # ─────────────────────────────
     # 2. Compose operators into a small pipeline
     # ─────────────────────────────
-    pipeline = augment.map() >> collate
+    pipeline = augment.map() | collate
 
     # ─────────────────────────────
     # 3. Execute the pipeline
@@ -44,7 +42,7 @@ def test_operator_structure_builds_correct_tree() -> None:
 
     # Root node — composition
     assert flow.node_type == NodeType.compose
-    assert flow.name == "augment.map >> collate"
+    assert flow.name == "augment.map | collate"
 
     # ─────────────────────────────
     # 5. Validate hierarchy
@@ -73,7 +71,7 @@ def test_operator_structure_builds_correct_tree() -> None:
     # ─────────────────────────────
     names = _collect_names(flow)
     assert names == [
-        "augment.map >> collate",
+        "augment.map | collate",
         "augment.map",
         "augment",
         "collate",

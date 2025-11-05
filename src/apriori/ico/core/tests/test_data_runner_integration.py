@@ -1,11 +1,13 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.data import IcoData
-from apriori.ico.core.flow import IcoFlow
-from apriori.ico.core.operator import IcoOperator
-from apriori.ico.core.pipeline import IcoPipeline
-from apriori.ico.core.stream import IcoStream
-from apriori.ico.core.types import NodeType
+from apriori.ico.core import (
+    IcoFlow,
+    IcoOperator,
+    IcoPipeline,
+    IcoSource,
+    IcoStream,
+    NodeType,
+)
 
 
 def test_ico_integration_data_runner_pipeline() -> None:
@@ -28,7 +30,7 @@ def test_ico_integration_data_runner_pipeline() -> None:
     def data_generator() -> Iterable[Iterable[float]]:
         yield from data
 
-    dataset = IcoData[Iterable[float]](data_generator)
+    dataset = IcoSource[Iterable[float]](data_generator)
 
     # ─────────────────────────────
     # 2. Define atomic operators
@@ -47,18 +49,18 @@ def test_ico_integration_data_runner_pipeline() -> None:
     )
 
     collate = IcoPipeline[Iterable[float], Iterable[float], float](
-        context=IcoOperator(list),
+        context=list,
         body=[],
-        output=IcoOperator(max),
+        output=max,
     )
 
-    pipeline = augment.map() >> collate
+    pipeline = augment.map() | collate
 
     # ─────────────────────────────
     # 4. Wrap into runner and connect with data
     # ─────────────────────────────
     runner = IcoStream[Iterable[float], float](pipeline)
-    data_flow = dataset >> runner
+    data_flow = dataset | runner
 
     # ─────────────────────────────
     # 5. Execute flow

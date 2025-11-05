@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Generic, final
 
-from apriori.ico.core.operator import IcoOperator
+from apriori.ico.core.operator import (
+    IcoOperator,
+    wrap_operator,
+)
 from apriori.ico.core.types import C, IcoOperatorProtocol, NodeType
 
 
@@ -17,10 +21,17 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
     ICO form:
         C → C → C   (repeated `steps` times)
 
-    Example:
-        decay = IcoOperator[float, float](lambda x: x * 0.9)
-        process = IcoProcess(decay, steps=3)
-        result = process(1.0)  # 0.9³ = 0.729
+    Example: Fibonacci sequence as a process
+    An iterative ICO process can model recursion or
+    stateful computations.
+
+    >>> fib_process = IcoProcess(lambda c: (c[1], c[0] + c[1]), num_iterations=8)
+    >>> fib_process((0, 1))
+    (21, 34)
+
+    Flow structure:
+        process[C → C]
+        └── operator[fib_step]
     """
 
     __slots__ = (
@@ -32,15 +43,17 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
 
     def __init__(
         self,
-        body: IcoOperatorProtocol[C, C],
+        body: Callable[[C], C],
         num_iterations: int,
     ):
+        body_op = wrap_operator(body)
+
         super().__init__(
             fn=self._run_loop,
             node_type=NodeType.process,
-            children=[body],
+            children=[body_op],
         )
-        self.body = body
+        self.body = body_op
         self.num_iterations = num_iterations
 
     def _run_loop(self, context: C) -> C:

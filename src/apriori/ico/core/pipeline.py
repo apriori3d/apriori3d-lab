@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Generic, final
 
-from apriori.ico.core.operator import IcoOperator
+from apriori.ico.core.operator import (
+    IcoOperator,
+    wrap_operator,
+)
 from apriori.ico.core.types import C, I, IcoOperatorProtocol, NodeType, O
 
 
@@ -25,18 +28,18 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
     accumulated metrics, cached buffers) within the same pipeline lifecycle.
 
     Example:
-        >>> from apriori.ico.core import IcoOperator, IcoPipeline
+        |> from apriori.ico.core import IcoOperator, IcoPipeline
 
-        >>> to_float = IcoOperator(float)
-        >>> scale = IcoOperator(lambda x: x * 2)
-        >>> to_string = IcoOperator(str)
+        |> to_float = IcoOperator(float)
+        |> scale = IcoOperator(lambda x: x * 2)
+        |> to_string = IcoOperator(str)
 
-        >>> pipeline = IcoPipeline(
+        |> pipeline = IcoPipeline(
         ...     context=to_float,
         ...     body=[scale],
         ...     output=to_string,
         ... )
-        >>> print(pipeline("21.0"))
+        |> print(pipeline("21.0"))
         '42.0'
 
         # ICO structure:
@@ -54,18 +57,23 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
 
     def __init__(
         self,
-        context: IcoOperatorProtocol[I, C],
-        body: Sequence[IcoOperatorProtocol[C, C]],
-        output: IcoOperatorProtocol[C, O],
+        context: Callable[[I], C],
+        body: Sequence[Callable[[C], C]],
+        output: Callable[[C], O],
     ):
+        # Wrap all components into IcoOperators if needed
+        context_op = wrap_operator(context)
+        body_ops = [wrap_operator(op) for op in body]
+        output_op = wrap_operator(output)
+
         super().__init__(
             fn=self._run_pipeline,
             node_type=NodeType.pipeline,
-            children=[context] + list(body) + [output],
+            children=[context_op] + body_ops + [output_op],
         )
-        self.context = context
-        self.body = body
-        self.output = output
+        self.context = context_op
+        self.body = body_ops
+        self.output = output_op
 
     def _run_pipeline(self, item: I) -> O:
         ctx = self.context(item)

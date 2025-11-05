@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 # ──── Generic type variables for ICO model ────
 
@@ -27,8 +27,7 @@ class NodeType(Enum):
 
 
 # ─── Operator Protocol ───
-
-
+@runtime_checkable
 class IcoOperatorProtocol(Protocol[I, O]):
     """
     Protocol for ICO Operators, defining the expected interface.

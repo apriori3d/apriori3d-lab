@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core.operator import IcoOperator
+from apriori.ico.core import IcoOperator
 
 
 def test_map_applies_elementwise() -> None:
@@ -15,5 +15,5 @@ def test_map_and_compose_chain() -> None:
     scale = IcoOperator[float, float](lambda x: x * 2)
     total = IcoOperator[Iterable[float], float](lambda xs: sum(xs))
 
-    pipeline = scale.map() >> total
+    pipeline = scale.map() | total
     assert pipeline([1, 2, 3]) == 12

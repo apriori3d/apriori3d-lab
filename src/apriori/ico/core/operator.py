@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, overload
 
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
@@ -37,7 +37,7 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
         >>> to_str = IcoOperator(str)
 
         # Compose: I → O → O2 → O3 == I → O3
-        >>> pipeline = to_float >> scale >> to_str
+        >>> pipeline = to_float | scale | to_str
         >>> print(pipeline("21.0"))
         '42.0'
 
@@ -49,7 +49,7 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
         # Inspect flow
         >>> flow = pipeline.describe_flow()
         >>> print(flow.name)
-        to_float >> scale >> to_string
+        to_float | scale | to_string
     """
 
     __slots__ = ("fn", "name", "node_type", "children")
@@ -73,8 +73,23 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
         self.node_type = node_type
         self.children = children if children is not None else []
 
+    @overload
     def __call__(self, item: I) -> O:
-        return self.fn(item)
+        # Method overload for standard call with input
+        ...
+
+    @overload
+    def __call__(self) -> O:
+        # Method overload for no-argument call in flow with IcoSource
+        ...
+
+    def __call__(self, item: I | None = None, *args: Any) -> O:
+        if item is not None:
+            # Call for standard operator with input
+            return self.fn(item)
+
+        # Call for IcoSource with no input
+        return self.fn(None)  # type: ignore
 
     # ─── Composition ───
 
@@ -86,7 +101,7 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
 
         return IcoOperator(
             fn=composed,
-            name=f"{self.name} >> {other.name}",
+            name=f"{self.name} | {other.name}",
             node_type=NodeType.compose,
             children=[self, other],
         )
@@ -115,3 +130,10 @@ class IcoOperator(IcoOperatorProtocol[I, O], Generic[I, O]):
             node_type=NodeType.map,
             children=[self],
         )
+
+
+def wrap_operator(
+    fn: Callable[[I], O],
+) -> IcoOperatorProtocol[I, O]:
+    """Wrap a callable into an IcoOperator if it is not already one."""
+    return fn if isinstance(fn, IcoOperatorProtocol) else IcoOperator(fn=fn)

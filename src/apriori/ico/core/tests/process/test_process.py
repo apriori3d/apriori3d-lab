@@ -1,7 +1,4 @@
-from apriori.ico.core.flow import IcoFlow
-from apriori.ico.core.operator import IcoOperator
-from apriori.ico.core.process import IcoProcess
-from apriori.ico.core.types import NodeType
+from apriori.ico.core import IcoFlow, IcoOperator, IcoProcess, NodeType
 
 
 def test_process_applies_body_multiple_times() -> None:
