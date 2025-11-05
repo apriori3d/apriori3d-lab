@@ -51,31 +51,36 @@ class IcoExecutionMixin(Generic[I, O]):
         State changed to: done
     """
 
-    exec_state: IcoExecutionState
+    _exec_state: IcoExecutionState
 
     def __init__(self) -> None:
         super().__init__()
-        self.exec_state = IcoExecutionState.idle
+        self._exec_state = IcoExecutionState.idle
+
+    @property
+    def exec_state(self) -> IcoExecutionState:
+        """Current execution state of the operator."""
+        return self._exec_state
 
     # ─── Execution tracking ───
 
     def track(self, fn: Callable[[I], O], item: I) -> O:
         """Execute fn(item) while updating internal state."""
-        self._set_state(IcoExecutionState.running)
+        self._set_exec_state(IcoExecutionState.running)
         try:
             result = fn(item)
         except Exception:
-            self._set_state(IcoExecutionState.faulted)
+            self._set_exec_state(IcoExecutionState.faulted)
             raise
         else:
-            self._set_state(IcoExecutionState.done)
+            self._set_exec_state(IcoExecutionState.done)
             return result
 
     # ─── Event hooks ───
 
-    def _set_state(self, state: IcoExecutionState) -> None:
+    def _set_exec_state(self, state: IcoExecutionState) -> None:
         """Internal helper to update state and trigger event callback."""
-        self.exec_state = state
+        self._exec_state = state
         self.on_exec_event(state)
 
     def on_exec_event(self, state: IcoExecutionState) -> None:

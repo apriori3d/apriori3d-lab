@@ -59,9 +59,9 @@ def test_infer_form_map_and_stream() -> None:
 
 
 def test_infer_form_process() -> None:
-    proc = IcoProcess(lambda c: c + 1, num_iterations=3)
+    proc = IcoProcess[float](lambda c: c + 1, num_iterations=3)
     form = infer_ico_form(proc)
-    assert form.name == "C → C"
+    assert form.name == "float → float"
 
 
 # ─── Pipeline ───

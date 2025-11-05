@@ -28,7 +28,7 @@ class IcoOperator(
         fn: I → O
 
     An `IcoOperator` wraps a callable and provides:
-    • composable transformations via `>>` or `|`
+    • chainable transformations via `|` or `chain()`
     • lazy mapping over iterables with `.map()`
     • structured graph representation for flow inspection
 
@@ -75,8 +75,11 @@ class IcoOperator(
         node_type: NodeType = NodeType.operator,
         children: list[IcoOperatorProtocol[Any, Any]] | None = None,
     ):
+        IcoLifecycleMixin.__init__(self)
+        IcoExecutionMixin.__init__(self)
+        super().__init__()
         self.fn = fn
-        self.name = name or f"IcoOperator[{str(self.fn)}]"
+        self.name = name or self.__class__.__name__
         self.node_type = node_type
         self.children = children if children is not None else []
 
@@ -105,27 +108,22 @@ class IcoOperator(
         # Call for IcoSource with no input
         return self.track(self.fn, None)  # type: ignore
 
-    # ─── Composition ───
+    # ─── Chaining ───
 
-    def compose(self, other: IcoOperatorProtocol[O, O2]) -> IcoOperator[I, O2]:
-        """Function composition: (I → O, O → O2) == I → O2."""
+    def chain(self, other: IcoOperatorProtocol[O, O2]) -> IcoOperator[I, O2]:
+        """Function chaining: (I → O, O → O2) == I → O2."""
 
-        def composed(x: I) -> O2:
+        def chained(x: I) -> O2:
             return other(self(x))
 
         return IcoOperator(
-            fn=composed,
-            name=f"{self.name} | {other.name}",
-            node_type=NodeType.compose,
+            fn=chained,
+            name="chain",
+            node_type=NodeType.chain,
             children=[self, other],
         )
 
-    def then(self, other: IcoOperatorProtocol[O, O2]) -> IcoOperator[I, O2]:
-        """Alias for compose, improves readability."""
-        return self.compose(other)
-
-    __or__ = compose
-    __rshift__ = compose
+    __or__ = chain
 
     # ─── Map ───
 
@@ -136,7 +134,7 @@ class IcoOperator(
 
         return IcoOperator(
             fn=self._map_fn,
-            name=f"{self.name}.map",
+            name="map",
             node_type=NodeType.map,
             children=[self],
         )

@@ -16,7 +16,7 @@ O = TypeVar("O")  # noqa: E741
 
 class NodeType(Enum):
     operator = auto()
-    compose = auto()
+    chain = auto()
     map = auto()
     pipeline = auto()
     stream = auto()

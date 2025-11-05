@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, final, get_args, get_type_hints
+from typing import Any, Literal, Union, final, get_args, get_origin, get_type_hints
 
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
@@ -36,7 +36,50 @@ class IcoForm:
         return infer_ico_form(operator)
 
 
-# ──── Factory method ────
+# ──── Type name formatter ────
+
+
+def _type_name(tp: Any) -> str:
+    """Return readable name for a possibly generic type (Iterable[float], tuple[int, str], etc.)."""
+    origin = get_origin(tp)
+    args = get_args(tp)
+
+    # ---- Generic types (Iterable[float], dict[str, int], etc.) ----
+    if origin:
+        origin_name = getattr(origin, "__name__", str(origin))
+
+        # Handle Union/Optional explicitly
+        if origin is Union:
+            # Optional[T] is Union[T, NoneType]
+            if len(args) == 2 and type(None) in args:
+                non_none = next(a for a in args if a is not type(None))
+                return f"Optional[{_type_name(non_none)}]"
+            args_str = " | ".join(_type_name(a) for a in args)
+            return f"Union[{args_str}]"
+
+        if origin is Literal:
+            # Literal[...] is special — represent as Literal[...]
+            args_str = ", ".join(repr(a) for a in args)
+            return f"Literal[{args_str}]"
+
+        # Regular generics
+        if args:
+            args_str = ", ".join(_type_name(a) for a in args)
+            return f"{origin_name}[{args_str}]"
+        return origin_name
+
+    # ---- Base cases ----
+    if isinstance(tp, type):
+        return tp.__name__
+    if tp is Any:
+        return "Any"
+    if tp is None or tp is type(None):
+        return "None"
+
+    return str(tp)
+
+
+# ──── ICO form inference ────
 
 
 def infer_ico_form(operator: IcoOperatorProtocol[Any, Any]) -> IcoForm:
@@ -52,40 +95,34 @@ def infer_ico_form(operator: IcoOperatorProtocol[Any, Any]) -> IcoForm:
     # ──── Match structural node type ────
     match node_type:
         case NodeType.operator:
-            # Example: IcoOperator[int, float] is int → float
             if args and len(args) == 2:
-                i_name, o_name = (getattr(a, "__name__", str(a)) for a in args)
+                i_name, o_name = (_type_name(a) for a in args)
                 return IcoForm(i_name, None, o_name)
 
-        case NodeType.compose:
-            # For a composition, infer form from first and last children
+        case NodeType.chain:
             if len(operator.children) >= 2:
                 first = infer_ico_form(operator.children[0])
                 last = infer_ico_form(operator.children[-1])
                 return IcoForm(first.i, None, last.o)
 
         case NodeType.map | NodeType.stream:
-            # Example: IcoStream[float, float] is Iterable[float] → Iterable[float]
-            child = operator.children[0] if len(operator.children) > 0 else None
+            child = operator.children[0] if operator.children else None
             inner = infer_ico_form(child) if child else IcoForm("Any", None, "Any")
             return IcoForm(f"Iterable[{inner.i}]", None, f"Iterable[{inner.o}]")
 
         case NodeType.pipeline:
-            # Example: IcoPipeline[int, float, str] is int → float → str
             if args and len(args) == 3:
-                i, c, o = (getattr(a, "__name__", str(a)) for a in args)
+                i, c, o = (_type_name(a) for a in args)
                 return IcoForm(i, c, o)
 
         case NodeType.process:
-            # Example: IcoProcess[float] is float → float
             if args and len(args) == 1:
-                c = getattr(args[0], "__name__", str(args[0]))
+                c = _type_name(args[0])
                 return IcoForm(c, None, c)
 
         case NodeType.source:
-            # Example: IcoSource[float] is () → Iterable[float]
             if args:
-                o_name = getattr(args[0], "__name__", str(args[0]))
+                o_name = _type_name(args[0])
                 return IcoForm("()", None, f"Iterable[{o_name}]")
 
     # ──── Fallback to function type hints ────
@@ -93,10 +130,6 @@ def infer_ico_form(operator: IcoOperatorProtocol[Any, Any]) -> IcoForm:
         hints = get_type_hints(operator.fn)
         input_type = next(iter(hints.values()), Any)
         output_type = hints.get("return", Any)
-        return IcoForm(
-            getattr(input_type, "__name__", "Any"),
-            None,
-            getattr(output_type, "__name__", "Any"),
-        )
+        return IcoForm(_type_name(input_type), None, _type_name(output_type))
     except Exception:
         return IcoForm("Any", None, "Any")

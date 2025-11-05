@@ -46,7 +46,7 @@ def test_data_structure_representation() -> None:
     structure = IcoFlowMeta.from_operator(flow)
 
     # Root node should be composition
-    assert structure.node_type == NodeType.compose
+    assert structure.node_type == NodeType.chain
 
     # Check child order
     data_node, stream_node = structure.children

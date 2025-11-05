@@ -69,7 +69,7 @@ class IcoPipeline(IcoOperator[I, O], Generic[I, C, O], IcoOperatorProtocol[I, O]
 
         super().__init__(
             fn=self._run_pipeline,
-            name=name or "IcoPipeline",
+            name=name,
             node_type=NodeType.pipeline,
             children=[context_op] + body_ops + [output_op],
         )

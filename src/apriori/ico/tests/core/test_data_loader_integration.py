@@ -74,7 +74,7 @@ def test_ico_integration_data_runner_pipeline() -> None:
     flow = IcoFlowMeta.from_operator(data_flow)
 
     # Root should be compose node
-    assert flow.node_type == NodeType.compose
+    assert flow.node_type == NodeType.chain
 
     # Compose should have two children: Data and Runner
     assert len(flow.children) == 2
@@ -84,7 +84,7 @@ def test_ico_integration_data_runner_pipeline() -> None:
     # Runner should contain one child, the compose of map for augmentation over batch and collation
     runner_node = flow.children[1]
     assert len(runner_node.children) == 1
-    assert runner_node.children[0].node_type == NodeType.compose
+    assert runner_node.children[0].node_type == NodeType.chain
 
     # Compose should have two children: the map for augmentation + collation
     compose_node = runner_node.children[0]

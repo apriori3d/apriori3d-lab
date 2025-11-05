@@ -30,10 +30,10 @@ def test_icoflow_operator_node() -> None:
 def test_icoflow_compose_node() -> None:
     a = IcoOperator[int, float](float, name="to_float")
     b = IcoOperator[float, str](str, name="to_str")
-    composed = a >> b
+    composed = a | b
 
     flow = IcoFlowMeta.from_operator(composed)
-    assert flow.node_type == NodeType.compose
+    assert flow.node_type == NodeType.chain
     assert flow.ico_form.name == "int → str"
     assert [c.name for c in flow.children] == ["to_float", "to_str"]
 
@@ -105,9 +105,12 @@ def test_icoflow_with_state_tracking() -> None:
             IcoLifecycleMixin.__init__(self)
             IcoExecutionMixin.__init__(self)
 
+        def set_states(self) -> None:
+            self._state = IcoLifecycleState.prepared
+            self._exec_state = IcoExecutionState.running
+
     op = Stateful()
-    op.state = IcoLifecycleState.prepared
-    op.exec_state = IcoExecutionState.running
+    op.set_states()
 
     flow = IcoFlowMeta.from_operator(op)
     assert flow.state == IcoLifecycleState.prepared

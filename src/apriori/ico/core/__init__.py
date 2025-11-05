@@ -3,6 +3,7 @@ from apriori.ico.core.dsl.pipeline import IcoPipeline
 from apriori.ico.core.dsl.process import IcoProcess
 from apriori.ico.core.dsl.source import IcoSource
 from apriori.ico.core.dsl.stream import IcoStream
+from apriori.ico.core.meta.describer import IcoDescriber
 from apriori.ico.core.meta.flow_meta import IcoFlowMeta
 from apriori.ico.core.meta.ico_form import IcoForm
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
@@ -26,6 +27,7 @@ __all__ = [
     # ─── Meta ───
     "IcoForm",
     "IcoFlowMeta",
+    "IcoDescriber",
     # ─── Runtime ───
     # ─── Lifecycle management ───
     "IcoLifecycleState",

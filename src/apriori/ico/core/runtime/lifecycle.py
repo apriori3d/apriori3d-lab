@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from typing_extensions import Self
 
 from apriori.ico.core.types import IcoOperatorProtocol
 
@@ -50,6 +52,7 @@ class SupportsIcoLifecycle(Protocol):
     """
 
     state: IcoLifecycleState
+    event: IcoLifecycleEvent | None
 
     def on_event(self, event: IcoLifecycleEvent) -> None: ...
 
@@ -70,31 +73,44 @@ class IcoLifecycleMixin:
         >>> IcoLifecycleMixin.broadcast_event(pipeline, IcoLifecycleEvent.prepare)
     """
 
-    state: IcoLifecycleState
+    _state: IcoLifecycleState
+    _event: IcoLifecycleEvent | None
 
     def __init__(self) -> None:
         super().__init__()
-        self.state = IcoLifecycleState.unknown
+        self._state = IcoLifecycleState.unknown
+        self._event = None
+
+    @property
+    def state(self) -> IcoLifecycleState:
+        """Current lifecycle state of the operator."""
+        return self._state
+
+    @property
+    def event(self) -> IcoLifecycleEvent | None:
+        """Current lifecycle event of the operator."""
+        return self._event
 
     def on_event(self, event: IcoLifecycleEvent) -> None:
         """Default no-op handler for lifecycle events. Override in subclasses if needed."""
-        return None
+        self._state = EVENT_TO_STATE.get(event, self._state)
+        self._event = event
 
-    @staticmethod
-    def broadcast_event(
-        operator: IcoOperatorProtocol[Any, Any],
-        event: IcoLifecycleEvent,
-    ) -> None:
+    def broadcast_event(self, event: IcoLifecycleEvent) -> Self:
         """
         Recursively propagate a lifecycle event through the operator tree.
 
         Each node implementing `SupportsIcoLifecycle`:
           • receives the event via `.on_event(event)`
           • updates its `.state` according to EVENT_TO_STATE
-        """
-        if isinstance(operator, SupportsIcoLifecycle):
-            operator.on_event(event)
-            operator.state = EVENT_TO_STATE.get(event, operator.state)
 
-        for child in getattr(operator, "children", []):
-            IcoLifecycleMixin.broadcast_event(child, event)
+        """
+
+        self.on_event(event)
+
+        if isinstance(self, IcoOperatorProtocol):
+            for child in self.children:
+                if isinstance(child, IcoLifecycleMixin):
+                    child.broadcast_event(event)
+
+        return self

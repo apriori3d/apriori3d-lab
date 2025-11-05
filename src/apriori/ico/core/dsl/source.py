@@ -33,7 +33,7 @@ class IcoSource(
 
         super().__init__(
             fn=wrapped,
-            name=name or f"IcoSource[{str(fn)}]",
+            name=name,
             node_type=NodeType.source,
             children=[],
         )

@@ -41,7 +41,7 @@ class IcoStream(
 
         super().__init__(
             fn=self._stream_items,
-            name=name or f"IcoStream[{body_op.name}]",
+            name=name,
             node_type=NodeType.stream,
             children=[body_op],
         )
