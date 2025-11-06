@@ -62,8 +62,6 @@ class IcoOperator(
     __slots__ = ("fn", "name", "node_type", "children")
 
     fn: Callable[[I], O]
-
-    # -── Flow introspection ───
     name: str
     node_type: NodeType
     children: list[IcoOperatorProtocol[Any, Any]]
@@ -88,7 +86,7 @@ class IcoOperator(
     def __str__(self) -> str:
         return self.name
 
-    # ─── Operator execution ───
+    # ─── Declarative sync execution path ───
 
     @overload
     def __call__(self, item: I) -> O:
@@ -107,6 +105,12 @@ class IcoOperator(
 
         # Call for IcoSource with no input
         return self.track(self.fn, None)  # type: ignore
+
+    # ─── Imperative async execution path ───
+
+    async def run_async(self, item: I) -> O:
+        """Asynchronous execution of the operator."""
+        return self(item)
 
     # ─── Chaining ───
 

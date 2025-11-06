@@ -22,6 +22,8 @@ class NodeType(Enum):
     stream = auto()
     process = auto()
     source = auto()
+    agent = auto()
+    agent_host = auto()
 
 
 # ─── Operator Protocol ───
@@ -31,9 +33,20 @@ class IcoOperatorProtocol(Protocol[I, O]):
     Protocol for ICO Operators, defining the expected interface.
     """
 
+    # ─── Core callable function ───
+
     fn: Callable[[I], O]
+
+    # -── Structural attributes for graph representation ───
+
     name: str
     node_type: NodeType
     children: list[IcoOperatorProtocol[Any, Any]]
 
+    # ─── Declarative sync execution path ───
+
     def __call__(self, item: I) -> O: ...
+
+    # ─── Imperative async execution path ───
+
+    async def run_async(self, item: I) -> O: ...
