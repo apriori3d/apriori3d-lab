@@ -43,7 +43,7 @@ def test_lifecycle_broadcast_updates_nested_states() -> None:
             super().on_event(event)
             self.events.append(event)
 
-    class StatelessOp(IcoOperatorProtocol[int, int]):
+    class StatelessOp:
         """A simple stateless operator that ignores lifecycle events."""
 
         fn: Callable[[int], int]
