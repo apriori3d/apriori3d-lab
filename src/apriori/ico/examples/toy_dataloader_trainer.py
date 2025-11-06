@@ -5,12 +5,11 @@ from collections.abc import Iterable
 from rich.console import Console
 
 from apriori.ico.core import (
-    IcoDescriber,
     IcoFlowMeta,
-    IcoOperator,
     IcoPipeline,
     IcoSource,
     IcoStream,
+    describe,
 )
 
 
@@ -30,19 +29,19 @@ dataset = IcoSource[list[float]](generate_batches, name="dataset")
 # ──── 2. Define augmentation & collation pipelines ────
 
 augment = IcoPipeline[float, float, float](
-    context=IcoOperator[float, float](lambda x: x, name="identity_ctx"),
+    context=lambda x: x,
     body=[
-        IcoOperator[float, float](lambda x: x * 1.1, name="scale_up"),
-        IcoOperator[float, float](lambda x: x + 0.1, name="shift"),
+        lambda x: x * 1.1,
+        lambda x: x + 0.1,
     ],
-    output=IcoOperator[float, float](lambda x: x, name="identity_out"),
+    output=lambda x: x,
     name="augment_pipeline",
 )
 
 collate = IcoPipeline[Iterable[float], Iterable[float], float](
-    context=IcoOperator[Iterable[float], Iterable[float]](list, name="to_list"),
+    context=list,
     body=[],
-    output=IcoOperator[Iterable[float], float](max, name="max_value"),
+    output=max,
     name="collate_pipeline",
 )
 
@@ -71,12 +70,10 @@ def pow_if_needed(values: float) -> float:
     return values**2 if values <= 1.0 else values
 
 
-train_step = IcoOperator[float, float](pow_if_needed, name="train_step")
-
 train_pipeline = IcoPipeline[float, float, float](
-    context=IcoOperator[float, float](lambda xs: xs, name="identity_ctx"),
-    body=[train_step],
-    output=IcoOperator[float, float](lambda xs: xs, name="identity_out"),
+    context=lambda xs: xs,
+    body=[pow_if_needed],
+    output=lambda xs: xs,
     name="train_pipeline",
 )
 
@@ -92,4 +89,4 @@ flow_meta = IcoFlowMeta.from_operator(full_flow)
 
 console = Console()
 console.rule("[bold blue]ICO Dataflow: Dataset → Stream → Train")
-console.print(IcoDescriber.describe(flow_meta, show_states=False, show_ico_form=True))
+console.print(describe(flow_meta))

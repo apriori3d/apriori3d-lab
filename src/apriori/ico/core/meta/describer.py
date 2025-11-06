@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import final
-
 from rich.text import Text
 from rich.tree import Tree
 
@@ -9,78 +7,71 @@ from apriori.ico.core.meta.flow_meta import IcoFlowMeta
 from apriori.ico.core.runtime.execution import IcoExecutionState
 from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent, IcoLifecycleState
 
-# ──── IcoDescriber ────
+
+def describe(
+    flow: IcoFlowMeta,
+    *,
+    show_states: bool = True,
+    show_ico_form: bool = False,
+) -> Tree:
+    """Render an ICO operator graph (flow) as a rich tree."""
+    return _build_node(flow, show_states, show_ico_form)
 
 
-@final
-class IcoDescriber:
-    """Render an ICO operator graph (IcoFlowMeta) as a rich tree."""
+# ─── Recursive builder ───
 
-    __slots__ = ()
 
-    # ─── Entry point ───
+def _build_node(
+    flow: IcoFlowMeta,
+    show_states: bool,
+    show_ico_form: bool,
+) -> Tree:
+    label = _format_label(flow, show_states, show_ico_form)
+    node = Tree(label)
+    for child in flow.children:
+        node.add(_build_node(child, show_states, show_ico_form))
+    return node
 
-    @staticmethod
-    def describe(
-        flow: IcoFlowMeta,
-        *,
-        show_states: bool = True,
-        show_ico_form: bool = False,
-    ) -> Tree:
-        """Render the given IcoFlowMeta as a Rich tree."""
-        return IcoDescriber._build_node(flow, show_states, show_ico_form)
 
-    # ─── Recursive builder ───
+# ─── Label formatting ───
 
-    @staticmethod
-    def _build_node(
-        flow: IcoFlowMeta,
-        show_states: bool,
-        show_ico_form: bool,
-    ) -> Tree:
-        label = IcoDescriber._format_label(flow, show_states, show_ico_form)
-        node = Tree(label)
-        for child in flow.children:
-            node.add(IcoDescriber._build_node(child, show_states, show_ico_form))
-        return node
 
-    # ─── Label formatting ───
+def _format_label(
+    flow_meta: IcoFlowMeta,
+    show_states: bool,
+    show_ico_form: bool,
+) -> Text:
+    text = Text(flow_meta.name or flow_meta.node_type.name, style="bold cyan")
+    text.append(f" ({flow_meta.node_type.name})", style="dim")
 
-    @staticmethod
-    def _format_label(
-        flow_meta: IcoFlowMeta,
-        show_states: bool,
-        show_ico_form: bool,
-    ) -> Text:
-        text = Text(flow_meta.name or flow_meta.node_type.name, style="bold cyan")
-        text.append(f" ({flow_meta.node_type.name})", style="dim")
+    # Show ICO form (signature)
+    if show_ico_form:
+        text.append(f"  [{flow_meta.ico_form.name}]", style="magenta")
 
-        # Show ICO form (signature)
-        if show_ico_form:
-            text.append(f"  [{flow_meta.ico_form.name}]", style="magenta")
+    # Show runtime states if available
+    if show_states:
+        if flow_meta.state is not None:
+            color = {
+                IcoLifecycleState.unknown: "grey50",
+                IcoLifecycleState.prepared: "yellow",
+                IcoLifecycleState.ready: "green",
+                IcoLifecycleState.cleaned: "grey70",
+            }.get(flow_meta.state, "white")
+            text.append(f" [{flow_meta.state.name}]", style=color)
 
-        # Show runtime states if available
-        if show_states:
-            if flow_meta.state is not None:
-                color = {
-                    IcoLifecycleState.unknown: "grey50",
-                    IcoLifecycleState.prepared: "yellow",
-                    IcoLifecycleState.ready: "green",
-                    IcoLifecycleState.cleaned: "grey70",
-                }.get(flow_meta.state, "white")
-                text.append(f" [{flow_meta.state.name}]", style=color)
+        if flow_meta.exec_state is not None:
+            color = {
+                IcoExecutionState.idle: "grey50",
+                IcoExecutionState.running: "blue",
+                IcoExecutionState.done: "green",
+                IcoExecutionState.faulted: "red",
+            }.get(flow_meta.exec_state, "white")
+            text.append(f" <{flow_meta.exec_state.name}>", style=color)
 
-            if flow_meta.exec_state is not None:
-                color = {
-                    IcoExecutionState.idle: "grey50",
-                    IcoExecutionState.running: "blue",
-                    IcoExecutionState.done: "green",
-                    IcoExecutionState.faulted: "red",
-                }.get(flow_meta.exec_state, "white")
-                text.append(f" <{flow_meta.exec_state.name}>", style=color)
+    return text
 
-        return text
 
+# ──── Example usage ────
 
 if __name__ == "__main__":
     from collections.abc import Iterable
@@ -88,7 +79,6 @@ if __name__ == "__main__":
     from rich.console import Console
 
     from apriori.ico.core import (
-        IcoDescriber,
         IcoFlowMeta,
         IcoOperator,
         IcoPipeline,
@@ -163,13 +153,11 @@ if __name__ == "__main__":
     full_flow = dataflow | train_stream
 
     full_flow.broadcast_event(IcoLifecycleEvent.prepare)
-    # full_flow.broadcast_event(IcoLifecycleEvent.reset)
+    full_flow.broadcast_event(IcoLifecycleEvent.reset)
 
     # ──── 6. Visualize ────
     flow_meta = IcoFlowMeta.from_operator(full_flow)
 
     console = Console()
     console.rule("[bold blue]ICO Dataflow: Dataset → Stream → Train")
-    console.print(
-        IcoDescriber.describe(flow_meta, show_states=True, show_ico_form=False)
-    )
+    console.print(describe(flow_meta, show_states=True))

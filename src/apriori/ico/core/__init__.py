@@ -1,9 +1,9 @@
-from apriori.ico.core.dsl.operator import IcoOperator, wrap_operator
+from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.dsl.pipeline import IcoPipeline
 from apriori.ico.core.dsl.process import IcoProcess
 from apriori.ico.core.dsl.source import IcoSource
 from apriori.ico.core.dsl.stream import IcoStream
-from apriori.ico.core.meta.describer import IcoDescriber
+from apriori.ico.core.meta.describer import describe
 from apriori.ico.core.meta.flow_meta import IcoFlowMeta
 from apriori.ico.core.meta.ico_form import IcoForm
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
@@ -24,10 +24,6 @@ __all__ = [
     "IcoProcess",
     "IcoStream",
     "IcoSource",
-    # ─── Meta ───
-    "IcoForm",
-    "IcoFlowMeta",
-    "IcoDescriber",
     # ─── Runtime ───
     # ─── Lifecycle management ───
     "IcoLifecycleState",
@@ -37,6 +33,8 @@ __all__ = [
     # ─── Execution tracking ───
     "IcoExecutionState",
     "IcoExecutionMixin",
-    # ─── Utility functions ───
-    "wrap_operator",
+    # ─── Meta ───
+    "IcoForm",
+    "IcoFlowMeta",
+    "describe",
 ]
