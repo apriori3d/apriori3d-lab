@@ -32,64 +32,68 @@ class MessageType(Enum):
 
 @dataclass(slots=True)
 class MessagePayload:
-    __worker_message_type__: ClassVar[MessageType]
+    __message_type__: ClassVar[MessageType]
+
+    def __init__(self) -> None:
+        if not hasattr(self, "__message_type__"):
+            raise NotImplementedError(
+                "Subclasses must define __message_type__ class variable."
+            )
 
     @property
     def message_type(self) -> MessageType:
-        return self.__worker_message_type__
+        return self.__message_type__
 
-    def __init__(self) -> None:
-        if not hasattr(self, "__worker_message_type__"):
-            raise NotImplementedError(
-                "Subclasses must define __worker_message_type__ class variable."
-            )
+    @classmethod
+    def get_message_type(cls) -> MessageType:
+        return cls.__message_type__
 
 
 @final
 @dataclass(slots=True)
 class LifecycleEventPayload(MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.lifecycle_event
+    __message_type__: ClassVar[MessageType] = MessageType.lifecycle_event
     event: IcoLifecycleEvent
 
 
 @final
 @dataclass(slots=True)
 class InputPayload(Generic[I], MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.input
+    __message_type__: ClassVar[MessageType] = MessageType.input
     input: I
 
 
 @final
 @dataclass(slots=True)
-class ShutdownPayload(Generic[I], MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.shutdown
+class ShutdownPayload(MessagePayload):
+    __message_type__: ClassVar[MessageType] = MessageType.shutdown
 
 
 @final
 @dataclass(slots=True)
 class AcknowledgePayload(MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.fault
-    message_type: MessageType
+    __message_type__: ClassVar[MessageType] = MessageType.acknowledge
+    ack_message_type: MessageType
 
 
 @final
 @dataclass(slots=True)
 class ExecutionStatePayload(MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.execution_event
+    __message_type__: ClassVar[MessageType] = MessageType.execution_event
     state: IcoExecutionState
 
 
 @final
 @dataclass(slots=True)
 class OutputPayload(Generic[O], MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.output
+    __message_type__: ClassVar[MessageType] = MessageType.output
     output: O
 
 
 @final
 @dataclass(slots=True)
 class ErrorPayload(MessagePayload):
-    __worker_message_type__: ClassVar[MessageType] = MessageType.fault
+    __message_type__: ClassVar[MessageType] = MessageType.fault
     error: str
 
 
@@ -101,9 +105,9 @@ PayloadT = TypeVar("PayloadT", bound=MessagePayload)
 @final
 @dataclass(slots=True)
 class WorkerMessage(Generic[PayloadT]):
-    type: MessageType
+    message_type: MessageType
     payload: PayloadT
 
     @staticmethod
     def create(payload: PayloadT) -> WorkerMessage[PayloadT]:
-        return WorkerMessage(type=payload.message_type, payload=payload)
+        return WorkerMessage(message_type=payload.message_type, payload=payload)

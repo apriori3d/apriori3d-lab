@@ -22,6 +22,7 @@ class NodeType(Enum):
     stream = auto()
     process = auto()
     source = auto()
+    sink = auto()
     agent = auto()
     agent_host = auto()
 

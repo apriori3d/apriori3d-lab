@@ -13,6 +13,7 @@ class IcoExecutionState(Enum):
     """Local, runtime-level execution state of an ICO operator."""
 
     idle = auto()
+    ready = auto()
     running = auto()
     done = auto()
     faulted = auto()

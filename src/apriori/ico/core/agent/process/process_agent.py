@@ -1,9 +1,10 @@
+import multiprocessing as mp
 from collections.abc import Callable
-from multiprocessing import Process
+from multiprocessing import Queue
+from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import TYPE_CHECKING, Any, Generic, cast
 
-from torch.multiprocessing import Queue
-
+from apriori.flow.progress.progress_relay import ProgressRelay
 from apriori.ico.core.agent.process.messages import (
     AcknowledgePayload,
     ErrorPayload,
@@ -56,21 +57,19 @@ class IcoProcessAgent(
     by offloading computation into an external process.
     """
 
-    operator_factory: Callable[[], IcoOperatorProtocol[I, O]]
-    operator_mirror: IcoOperatorProtocol[I, O]
-    in_queue: WorkerQueue
-    out_queue: WorkerQueue
-    worker_process: Process
+    _operator_factory: Callable[[], IcoOperatorProtocol[I, O]]
+    _operator_mirror: IcoOperatorProtocol[I, O]
+    _mp_context: SpawnContext
+    _in_queue: WorkerQueue
+    _out_queue: WorkerQueue
+    worker_process: SpawnProcess | None
 
     def __init__(
         self,
         name: str,
         operator_factory: Callable[[], IcoOperatorProtocol[I, O]],
     ) -> None:
-        # Initialize local operator and queues
         operator_mirror = operator_factory()
-        in_queue = WorkerQueue()
-        out_queue = WorkerQueue()
 
         # Initialize base IcoOperator with process-bound fn
         super().__init__(
@@ -79,16 +78,12 @@ class IcoProcessAgent(
             node_type=NodeType.agent,
             children=[operator_mirror],
         )
-
-        # Store references and spawn worker process
-        self.operator_factory = operator_factory
-        self.in_queue = in_queue
-        self.out_queue = out_queue
-        self.worker_process = ProcessWorker[I, O].spawn(
-            operator_factory=operator_factory,
-            in_queue=self.in_queue,
-            out_queue=self.out_queue,
-        )
+        # Initialize mp queues
+        self._mp_context = mp.get_context("spawn")
+        self._in_queue = self._mp_context.Queue()
+        self._out_queue = self._mp_context.Queue()
+        self._operator_factory = operator_factory
+        self.worker_process = None
 
     # ─── Main call interface ───
 
@@ -106,19 +101,25 @@ class IcoProcessAgent(
         """
         Sends a payload to the worker and waits for acknowledgment.
         """
+        if self.worker_process is None or not self.worker_process.is_alive():
+            raise RuntimeError("Worker process is not running.")
+
         message = WorkerMessage(payload.message_type, payload)
-        self.in_queue.put(message)
+        self._in_queue.put(message)
         if ack:
-            self._acknowledge(message.type)
+            self._acknowledge(message.message_type)
 
     def _acknowledge(self, message_type: MessageType) -> None:
         """
         Waits for AcknowledgePayload of a given message type.
         """
+        if self.worker_process is None or not self.worker_process.is_alive():
+            raise RuntimeError("Worker process is not running.")
+
         ack = self._wait_for_payload(AcknowledgePayload)
-        if ack.message_type is not message_type:
+        if ack.ack_message_type is not message_type:
             raise RuntimeError(
-                f"Unexpected acknowledgment: expected {message_type}, got {ack.message_type}"
+                f"Unexpected acknowledgment: expected {message_type}, got {ack.ack_message_type}"
             )
 
     def _wait_for_payload(
@@ -130,12 +131,18 @@ class IcoProcessAgent(
         Waits for a specific response payload from the worker.
         Handles execution events and fault messages.
         """
-        message_type = payload_type.__worker_message_type__
+        if self.worker_process is None or not self.worker_process.is_alive():
+            raise RuntimeError("Worker process is not running.")
+
+        message_type = payload_type.get_message_type()
 
         while True:
-            message = self.out_queue.get(timeout=timeout)
+            message = self._out_queue.get(timeout=timeout)
 
-            match message.type:
+            if ProgressRelay.relay_to(self.progress, message):
+                continue  # progress message handled
+
+            match message.message_type:
                 case MessageType.fault:
                     raise RuntimeError(
                         f"Worker fault: {cast(ErrorPayload, message.payload).error}"
@@ -147,16 +154,12 @@ class IcoProcessAgent(
                     )
                     continue  # wait for target response
 
-            if message.payload.message_type is not message_type:
+            if message.message_type is not message_type:
                 raise RuntimeError(
                     f"Unexpected message type: expected {message_type}, got {message.payload.message_type}"
                 )
-            if not isinstance(message.payload, payload_type):
-                raise TypeError(
-                    f"Invalid payload type: expected {payload_type.__name__}, got {type(message.payload).__name__}"
-                )
 
-            return message.payload
+            return cast(PayloadT, message.payload)
 
     # ─── Lifecycle coordination ───
 
@@ -171,38 +174,51 @@ class IcoProcessAgent(
             case IcoLifecycleEvent.prepare:
                 # Start fresh worker and forward prepare
                 self.worker_process = ProcessWorker[I, O].spawn(
-                    operator_factory=self.operator_factory,
-                    in_queue=self.in_queue,
-                    out_queue=self.out_queue,
+                    mp_context=self._mp_context,
+                    in_queue=self._in_queue,
+                    out_queue=self._out_queue,
+                    operator_factory=self._operator_factory,
                 )
                 self._send_payload(LifecycleEventPayload(event))
 
             case IcoLifecycleEvent.cleanup:
-                # Forward cleanup
                 self._send_payload(LifecycleEventPayload(event))
-
-                # Then terminate worker
-                self._send_payload(ShutdownPayload(), ack=False)
-
-                try:
-                    # Gracefully join the worker process
-                    if self.worker_process and self.worker_process.is_alive():
-                        self.worker_process.join(timeout=5)
-                        if self.worker_process.exitcode != 0:
-                            self.progress.print(
-                                f"⚠️ Process Agent {self.name} worker exited with code {self.worker_process.exitcode}."
-                            )
-                except Exception as e:
-                    self.progress.print(
-                        f"❌ Error while stopping agent {self.name}: {e}"
-                    )
-                finally:
-                    if self.worker_process.is_alive():
-                        self.progress.print(
-                            f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
-                        )
-                        self.worker_process.terminate()
+                self._send_payload(ShutdownPayload())
+                self._shutdown_worker()
 
             case _:
                 # Forward all other lifecycle events
                 self._send_payload(LifecycleEventPayload(event))
+
+    def _shutdown_worker(self) -> None:
+        if self.worker_process is None:
+            return
+        try:
+            # Gracefully join the worker process
+            if self.worker_process and self.worker_process.is_alive():
+                self.worker_process.join(timeout=5)
+
+                # Close queues
+                self._in_queue.close()
+                self._in_queue.join_thread()
+                self._out_queue.close()
+                self._out_queue.join_thread()
+                print(f"Process Agent {self.name} worker joined.")
+
+                # Check if worker exited properly
+                if self.worker_process.exitcode is None:
+                    self.progress.print("⚠️ Worker did not exit (possibly stuck)")
+
+                elif self.worker_process.exitcode != 0:
+                    self.progress.print(
+                        f"⚠️ Process Agent {self.name} worker exited with code {self.worker_process.exitcode}."
+                    )
+        except Exception as e:
+            self.progress.print(f"❌ Error while stopping agent {self.name}: {e}")
+
+        finally:
+            if self.worker_process.is_alive():
+                self.progress.print(
+                    f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
+                )
+                self.worker_process.terminate()

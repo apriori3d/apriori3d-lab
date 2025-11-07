@@ -14,7 +14,7 @@ from apriori.ico.core.agent.process.messages import (
     WorkerMessage,
 )
 from apriori.ico.core.agent.process.process_worker import ProcessWorker
-from apriori.ico.tests.core.agent.process.test_utils import (
+from apriori.ico.tests.core.runtime.test_utils import (
     EchoOperator,
     NestedRecordingOperator,
     WorkerQueue,
@@ -43,7 +43,7 @@ def test_process_worker_lifecycle_events() -> None:
         msg = out_q.get(timeout=5)
 
         assert isinstance(msg.payload, AcknowledgePayload)
-        assert msg.payload.message_type == MessageType.lifecycle_event
+        assert msg.payload.ack_message_type == MessageType.lifecycle_event
 
     shutdown_worker(in_q, out_q, proc)
 

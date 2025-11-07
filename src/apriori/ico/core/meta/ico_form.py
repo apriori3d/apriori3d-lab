@@ -36,49 +36,6 @@ class IcoForm:
         return infer_ico_form(operator)
 
 
-# ──── Type name formatter ────
-
-
-def _type_name(tp: Any) -> str:
-    """Return readable name for a possibly generic type (Iterable[float], tuple[int, str], etc.)."""
-    origin = get_origin(tp)
-    args = get_args(tp)
-
-    # ---- Generic types (Iterable[float], dict[str, int], etc.) ----
-    if origin:
-        origin_name = getattr(origin, "__name__", str(origin))
-
-        # Handle Union/Optional explicitly
-        if origin is Union:
-            # Optional[T] is Union[T, NoneType]
-            if len(args) == 2 and type(None) in args:
-                non_none = next(a for a in args if a is not type(None))
-                return f"Optional[{_type_name(non_none)}]"
-            args_str = " | ".join(_type_name(a) for a in args)
-            return f"Union[{args_str}]"
-
-        if origin is Literal:
-            # Literal[...] is special — represent as Literal[...]
-            args_str = ", ".join(repr(a) for a in args)
-            return f"Literal[{args_str}]"
-
-        # Regular generics
-        if args:
-            args_str = ", ".join(_type_name(a) for a in args)
-            return f"{origin_name}[{args_str}]"
-        return origin_name
-
-    # ---- Base cases ----
-    if isinstance(tp, type):
-        return tp.__name__
-    if tp is Any:
-        return "Any"
-    if tp is None or tp is type(None):
-        return "None"
-
-    return str(tp)
-
-
 # ──── ICO form inference ────
 
 
@@ -121,9 +78,16 @@ def infer_ico_form(operator: IcoOperatorProtocol[Any, Any]) -> IcoForm:
                 return IcoForm(c, None, c)
 
         case NodeType.source:
+            # Example: IcoSource[float] is () → Iterable[float]
             if args:
                 o_name = _type_name(args[0])
                 return IcoForm("()", None, f"Iterable[{o_name}]")
+
+        case NodeType.sink:
+            # Example: IcoSink[float] is Iterable[float] → ()
+            if args and len(args) == 1:
+                i_name = _type_name(args[0])
+                return IcoForm(f"Iterable[{i_name}]", None, "()")
 
     # ──── Fallback to function type hints ────
     try:
@@ -133,3 +97,48 @@ def infer_ico_form(operator: IcoOperatorProtocol[Any, Any]) -> IcoForm:
         return IcoForm(_type_name(input_type), None, _type_name(output_type))
     except Exception:
         return IcoForm("Any", None, "Any")
+
+
+# ──── Type name formatter ────
+
+
+def _type_name(tp: Any) -> str:
+    """Return readable name for a possibly generic type (Iterable[float], tuple[int, str], etc.)."""
+    origin = get_origin(tp)
+    args = get_args(tp)
+
+    # ---- Generic types (Iterable[float], dict[str, int], etc.) ----
+    if origin:
+        origin_name = getattr(origin, "__name__", str(origin))
+
+        # Handle Union/Optional explicitly
+        if origin is Union:
+            # Optional[T] is Union[T, NoneType]
+            if len(args) == 2 and type(None) in args:
+                non_none = next(a for a in args if a is not type(None))
+                return f"Optional[{_type_name(non_none)}]"
+            args_str = " | ".join(_type_name(a) for a in args)
+            return f"Union[{args_str}]"
+
+        if origin is Literal:
+            # Literal[...] is special — represent as Literal[...]
+            args_str = ", ".join(repr(a) for a in args)
+            return f"Literal[{args_str}]"
+
+        # Regular generics
+        if args:
+            args_str = ", ".join(_type_name(a) for a in args)
+            return f"{origin_name}[{args_str}]"
+        return origin_name
+
+    # ---- Base cases ----
+    if isinstance(tp, type):
+        if isinstance(None, tp):
+            return "()"
+        return tp.__name__
+    if tp is Any:
+        return "Any"
+    if tp is None or tp is type(None):
+        return "()"
+
+    return str(tp)

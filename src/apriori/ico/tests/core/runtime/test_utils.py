@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 else:
     WorkerQueue = Queue  # noqa: F401
 
-# ──── Test Operators ────
-
 
 # ──── Simple Echo Operator ────
 
@@ -64,63 +62,42 @@ class FailingOperator(IcoOperatorProtocol[int, int]):
         return FailingOperator()
 
 
-# ──── Nested Recording Event Operator ────
-
-
-@dataclass
-class NestedRecordingOperator(
-    IcoOperatorProtocol[int, list[IcoLifecycleEvent]],
-    IcoLifecycleMixin,  # Added lifecycle support to allow event recording
-):
-    name: str = "NestedRecorder"
-    node_type: NodeType = NodeType.operator
-    children: list[IcoOperatorProtocol[Any, Any]] = field(default_factory=list)
-
-    # Mock function
-    fn: Callable[[int], list[IcoLifecycleEvent]] = lambda x: [IcoLifecycleEvent.prepare]
-
-    received_events: list[IcoLifecycleEvent] = field(default_factory=list)
-
-    def __call__(self, item: int) -> list[IcoLifecycleEvent]:
-        return self.received_events
-
-    async def run_async(self, _: int) -> list[IcoLifecycleEvent]:
-        raise NotImplementedError()
-
-    def on_event(self, event: IcoLifecycleEvent) -> None:
-        self.received_events.append(event)
-
-    @staticmethod
-    def create() -> IcoOperatorProtocol[int, list[IcoLifecycleEvent]]:
-        return NestedRecordingOperator()
-
-
 # ──── Recording Event Operator ────
 
 
-@dataclass
-class RecordingOperator(
-    IcoOperatorProtocol[int, list[IcoLifecycleEvent]],
+class LifecycleEventsRecordingOperator(
+    IcoOperatorProtocol[Any, Any],
     IcoLifecycleMixin,  # Added lifecycle support to allow event recording
 ):
-    name: str = "Recorder"
+    """
+    An operator that records all lifecycle events it receives and bypasses data flow.
+    ICO form:
+        Any → Any
+    """
+
+    name: str = "EventRecorder"
     node_type: NodeType = NodeType.operator
-    children: list[IcoOperatorProtocol[Any, Any]] = field(default_factory=list)
+    children: list[IcoOperatorProtocol[Any, Any]]
+    fn: Callable[[Any], Any]
 
-    # Create nested recorder
-    fn: Callable[[int], list[IcoLifecycleEvent]] = field(
-        default_factory=NestedRecordingOperator.create
-    )
+    received_events: list[IcoLifecycleEvent]
 
-    def __call__(self, item: int) -> list[IcoLifecycleEvent]:
+    def __init__(self) -> None:
+        IcoLifecycleMixin.__init__(self)
+        super().__init__()
+        # Bypass data flow
+        self.fn = lambda x: x
+        self.children = []
+        self.received_events = []
+
+    def __call__(self, item: Any) -> Any:
         return self.fn(item)
 
-    async def run_async(self, _: int) -> list[IcoLifecycleEvent]:
-        raise NotImplementedError()
+    async def run_async(self, item: Any) -> Any:
+        return await self(item)
 
-    @staticmethod
-    def create() -> IcoOperatorProtocol[int, list[IcoLifecycleEvent]]:
-        return RecordingOperator()
+    def on_event(self, event: IcoLifecycleEvent) -> None:
+        self.received_events.append(event)
 
 
 # ──── Worker Shutdown Helper ────

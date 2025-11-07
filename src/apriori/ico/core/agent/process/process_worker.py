@@ -1,5 +1,6 @@
 from collections.abc import Callable
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
+from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import TYPE_CHECKING, Any, Generic, final
 
 from apriori.flow.progress.progress_relay import ProgressRelay
@@ -12,6 +13,7 @@ from apriori.ico.core.agent.process.messages import (
     OutputPayload,
     WorkerMessage,
 )
+from apriori.ico.core.agent.process.worker_protocol import WorkerProtocol
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
 from apriori.ico.core.runtime.lifecycle import (
     IcoLifecycleMixin,
@@ -105,39 +107,55 @@ class ProcessWorker(
     # ──── Main loop ────
 
     def run_loop(self) -> None:
+        protocol = WorkerProtocol[I, O](self.fn, name=f"WorkerProtocol({self.name})")
+
+        while True:
+            msg = self.in_queue.get()
+            response = protocol.handle(msg)
+            self.out_queue.put(response)
+            if msg.message_type is MessageType.shutdown:
+                break
+
         # Process requests until a cleanup event is received
         while True:
             try:
                 message = self.in_queue.get()
-                print(f"Worker {self.name} received message: {message}")
 
                 if not isinstance(message, WorkerMessage):
                     raise TypeError(f"Invalid message type: {type(message)}")
 
-                match message.type:
+                match message.message_type:
                     case MessageType.lifecycle_event:
                         # Broadcast lifecycle event to hosted operator
                         self.broadcast_event(message.payload.event)
 
                         # Acknowledge lifecycle event
                         self.out_queue.put(
-                            WorkerMessage.create(AcknowledgePayload(message.type))
+                            WorkerMessage.create(
+                                AcknowledgePayload(message.message_type)
+                            )
                         )
 
                     case MessageType.input:
                         # Acknowledge input message
                         self.out_queue.put(
-                            WorkerMessage.create(AcknowledgePayload(message.type))
+                            WorkerMessage.create(
+                                AcknowledgePayload(message.message_type)
+                            )
                         )
-                        print(f"Worker {self.name} acknowledged input message.")
                         # Execute operator function
                         self._call_fn(message.payload)
 
                     case MessageType.shutdown:
                         self.progress.print(
-                            f"Worker {self.name} received shutdown event. Exiting loop."
+                            f"❎ Worker {self.name} received shutdown event. Exiting loop."
                         )
-                        # Do not send ack for shutdown because process will exit and queues will be closed
+                        self.out_queue.put(
+                            WorkerMessage.create(
+                                AcknowledgePayload(message.message_type)
+                            )
+                        )
+                        print(f"Worker {self.name} shutting down.")
                         break
 
             except Exception as e:
@@ -175,14 +193,16 @@ class ProcessWorker(
 
     @staticmethod
     def spawn(
+        *,
+        mp_context: SpawnContext,
         in_queue: WorkerQueue,
         out_queue: WorkerQueue,
         operator_factory: Callable[[], Any],
         name: str | None = None,
         relay_progress: bool = True,
-    ) -> Process:
+    ) -> SpawnProcess:
         # Create and start agent process
-        process = Process(
+        process = mp_context.Process(
             target=ProcessWorker._process_fn,
             args=(in_queue, out_queue, operator_factory, name, relay_progress),
         )

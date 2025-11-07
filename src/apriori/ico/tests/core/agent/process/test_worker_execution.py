@@ -12,7 +12,7 @@ from apriori.ico.core.agent.process.messages import (
 )
 from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.core.runtime.execution import IcoExecutionState
-from apriori.ico.tests.core.agent.process.test_utils import (
+from apriori.ico.tests.core.runtime.test_utils import (
     EchoOperator,
     WorkerQueue,
     shutdown_worker,
@@ -48,7 +48,7 @@ def test_process_worker_execution() -> None:
     assert isinstance(outputs[1], ExecutionStatePayload)
     assert isinstance(outputs[2], ExecutionStatePayload)
     assert isinstance(outputs[3], OutputPayload)
-    assert outputs[0].message_type == MessageType.input
+    assert outputs[0].ack_message_type == MessageType.input
     assert outputs[1].state == IcoExecutionState.running
     assert outputs[2].state == IcoExecutionState.done
     assert outputs[3].output == 42
