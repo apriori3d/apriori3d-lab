@@ -1,3 +1,4 @@
+from apriori.ico.core.agent.process.process_agent import IcoProcessAgent
 from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.dsl.pipeline import IcoPipeline
 from apriori.ico.core.dsl.process import IcoProcess
@@ -24,7 +25,8 @@ __all__ = [
     "IcoProcess",
     "IcoStream",
     "IcoSource",
-    # ─── Runtime ───
+    # ─── Agents ───
+    "IcoProcessAgent",
     # ─── Lifecycle management ───
     "IcoLifecycleState",
     "IcoLifecycleEvent",

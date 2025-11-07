@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from multiprocessing import Process
-from typing import Any, Generic, cast
+from typing import TYPE_CHECKING, Any, Generic, cast
 
 from torch.multiprocessing import Queue
 
@@ -13,6 +13,7 @@ from apriori.ico.core.agent.process.messages import (
     MessageType,
     OutputPayload,
     PayloadT,
+    ShutdownPayload,
     WorkerMessage,
 )
 from apriori.ico.core.agent.process.process_worker import ProcessWorker
@@ -20,6 +21,11 @@ from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent
 from apriori.ico.core.runtime.progress import ProgressMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
+
+if TYPE_CHECKING:
+    WorkerQueue = Queue[WorkerMessage[Any]]
+else:
+    WorkerQueue = Queue  # noqa: F401
 
 
 class IcoProcessAgent(
@@ -52,8 +58,8 @@ class IcoProcessAgent(
 
     operator_factory: Callable[[], IcoOperatorProtocol[I, O]]
     operator_mirror: IcoOperatorProtocol[I, O]
-    in_queue: Queue[WorkerMessage[Any]]
-    out_queue: Queue[WorkerMessage[Any]]
+    in_queue: WorkerQueue
+    out_queue: WorkerQueue
     worker_process: Process
 
     def __init__(
@@ -63,8 +69,8 @@ class IcoProcessAgent(
     ) -> None:
         # Initialize local operator and queues
         operator_mirror = operator_factory()
-        in_queue = Queue[WorkerMessage[Any]]()
-        out_queue = Queue[WorkerMessage[Any]]()
+        in_queue = WorkerQueue()
+        out_queue = WorkerQueue()
 
         # Initialize base IcoOperator with process-bound fn
         super().__init__(
@@ -96,13 +102,14 @@ class IcoProcessAgent(
 
     # ─── Message send/receive helpers ───
 
-    def _send_payload(self, payload: PayloadT) -> None:
+    def _send_payload(self, payload: PayloadT, ack: bool = True) -> None:
         """
         Sends a payload to the worker and waits for acknowledgment.
         """
         message = WorkerMessage(payload.message_type, payload)
         self.in_queue.put(message)
-        self._acknowledge(message.type)
+        if ack:
+            self._acknowledge(message.type)
 
     def _acknowledge(self, message_type: MessageType) -> None:
         """
@@ -171,22 +178,30 @@ class IcoProcessAgent(
                 self._send_payload(LifecycleEventPayload(event))
 
             case IcoLifecycleEvent.cleanup:
-                # Forward cleanup, then terminate worker
+                # Forward cleanup
                 self._send_payload(LifecycleEventPayload(event))
 
-                try:
-                    if self.worker_process and self.worker_process.is_alive():
-                        self.worker_process.terminate()
-                        self.worker_process.join(timeout=1)
+                # Then terminate worker
+                self._send_payload(ShutdownPayload(), ack=False)
 
-                        if self.worker_process.exitcode is None:
+                try:
+                    # Gracefully join the worker process
+                    if self.worker_process and self.worker_process.is_alive():
+                        self.worker_process.join(timeout=5)
+                        if self.worker_process.exitcode != 0:
                             self.progress.print(
-                                f"⚠️ Process Agent {self.name} did not terminate worker cleanly."
+                                f"⚠️ Process Agent {self.name} worker exited with code {self.worker_process.exitcode}."
                             )
                 except Exception as e:
                     self.progress.print(
                         f"❌ Error while stopping agent {self.name}: {e}"
                     )
+                finally:
+                    if self.worker_process.is_alive():
+                        self.progress.print(
+                            f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
+                        )
+                        self.worker_process.terminate()
 
             case _:
                 # Forward all other lifecycle events

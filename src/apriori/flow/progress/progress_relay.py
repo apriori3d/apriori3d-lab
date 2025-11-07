@@ -1,7 +1,9 @@
-import multiprocessing
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from multiprocessing.queues import Queue
+from typing import TYPE_CHECKING, Any
 
 from apriori.flow.progress.types import ProgressProtocol
 
@@ -18,16 +20,28 @@ class ProgressRelayMethod(Enum):
 @dataclass()
 class ProgressRelayMessage:
     progress_method: ProgressRelayMethod
-    progress_args: tuple
-    progress_kwargs: dict
+    progress_args: tuple[Any, ...]
+    progress_kwargs: dict[str, Any]
+
+
+if TYPE_CHECKING:
+    RelayQueue = Queue[Any]
+else:
+    RelayQueue = Queue  # noqa: F401
 
 
 class ProgressRelay(ProgressProtocol):
     __slot__ = "queue"
-    queue: multiprocessing.Queue
+    queue: RelayQueue
+    _tasks: list[Any]
 
-    def __init__(self, queue: multiprocessing.Queue):
+    def __init__(self, queue: RelayQueue):
         self.queue = queue
+        self._tasks = []
+
+    @property
+    def tasks(self) -> list[Any]:
+        return self._tasks
 
     @staticmethod
     def relay_to(progress: ProgressProtocol, message: Any) -> bool:
@@ -37,7 +51,7 @@ class ProgressRelay(ProgressProtocol):
         method(*message.progress_args, **message.progress_kwargs)
         return True
 
-    def print(self, *objects: Any, **kw_args: Any):
+    def print(self, *objects: Any, **kw_args: Any) -> None:
         self.queue.put(
             ProgressRelayMessage(
                 progress_method=ProgressRelayMethod.print,
@@ -46,7 +60,7 @@ class ProgressRelay(ProgressProtocol):
             ),
         )
 
-    def log(self, *objects, **kw_args):
+    def log(self, *objects: Any, **kw_args: Any) -> None:
         self.queue.put(
             ProgressRelayMessage(
                 progress_method=ProgressRelayMethod.log,
@@ -55,14 +69,8 @@ class ProgressRelay(ProgressProtocol):
             ),
         )
 
-    def add_task(self, description, total, **fields):
-        self.queue.put(
-            ProgressRelayMessage(
-                progress_method=ProgressRelayMethod.add_task,
-                progress_args=(description, total),
-                progress_kwargs=fields,
-            ),
-        )
+    def add_task(self, description: str, total: int, **fields: Any) -> int:
+        raise RuntimeError("Adding tasks via ProgressRelay is not supported.")
 
     def update(
         self,
@@ -92,7 +100,7 @@ class ProgressRelay(ProgressProtocol):
             ),
         )
 
-    def advance(self, task: int, n: float = 1.0):
+    def advance(self, task: int, n: float = 1.0) -> None:
         self.queue.put(
             ProgressRelayMessage(
                 progress_method=ProgressRelayMethod.advance,
@@ -101,7 +109,7 @@ class ProgressRelay(ProgressProtocol):
             ),
         )
 
-    def remove_task(self, task_id: int):
+    def remove_task(self, task_id: int) -> None:
         self.queue.put(
             ProgressRelayMessage(
                 progress_method=ProgressRelayMethod.remove_task,

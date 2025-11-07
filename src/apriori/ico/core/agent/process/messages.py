@@ -18,6 +18,7 @@ class MessageType(Enum):
     # ─── Message from Host to Worker ───
     lifecycle_event = auto()  # Lifecycle event for broadcasting
     input = auto()  # Input for hosted operator
+    shutdown = auto()  # Shutdown signal for a worker
 
     # ─── Message from Worker to Host ───
     acknowledge = auto()  # Acknowledgment of input messages
@@ -60,6 +61,12 @@ class InputPayload(Generic[I], MessagePayload):
 
 @final
 @dataclass(slots=True)
+class ShutdownPayload(Generic[I], MessagePayload):
+    __worker_message_type__: ClassVar[MessageType] = MessageType.shutdown
+
+
+@final
+@dataclass(slots=True)
 class AcknowledgePayload(MessagePayload):
     __worker_message_type__: ClassVar[MessageType] = MessageType.fault
     message_type: MessageType
@@ -85,17 +92,6 @@ class ErrorPayload(MessagePayload):
     __worker_message_type__: ClassVar[MessageType] = MessageType.fault
     error: str
 
-
-# ──── Message to Payload Mapping ────
-
-MESSAGE_PAYLOAD_MAP: dict[MessageType, type[MessagePayload]] = {
-    MessageType.lifecycle_event: LifecycleEventPayload,
-    MessageType.input: InputPayload,
-    MessageType.acknowledge: AcknowledgePayload,
-    MessageType.execution_event: ExecutionStatePayload,
-    MessageType.output: OutputPayload,
-    MessageType.fault: ErrorPayload,
-}
 
 # ──── Worker Message Definition ────
 

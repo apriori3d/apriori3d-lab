@@ -1,7 +1,8 @@
 from collections.abc import Callable
 from multiprocessing import Process, Queue
-from typing import Any, Generic, final
+from typing import TYPE_CHECKING, Any, Generic, final
 
+from apriori.flow.progress.progress_relay import ProgressRelay
 from apriori.ico.core.agent.process.messages import (
     AcknowledgePayload,
     ErrorPayload,
@@ -13,11 +14,15 @@ from apriori.ico.core.agent.process.messages import (
 )
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
 from apriori.ico.core.runtime.lifecycle import (
-    IcoLifecycleEvent,
     IcoLifecycleMixin,
 )
 from apriori.ico.core.runtime.progress import ProgressMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
+
+if TYPE_CHECKING:
+    WorkerQueue = Queue[WorkerMessage[Any]]
+else:
+    WorkerQueue = Queue  # noqa: F401
 
 
 @final
@@ -76,20 +81,24 @@ class ProcessWorker(
     children: list[IcoOperatorProtocol[Any, Any]]
 
     # Communication queues
-    in_queue: Queue[WorkerMessage[Any]]
-    out_queue: Queue[WorkerMessage[Any]]
+    in_queue: WorkerQueue
+    out_queue: WorkerQueue
 
     def __init__(
         self,
         operator_factory: Callable[[], IcoOperatorProtocol[I, O]],
-        in_queue: Queue[WorkerMessage[Any]],
-        out_queue: Queue[WorkerMessage[Any]],
+        in_queue: WorkerQueue,
+        out_queue: WorkerQueue,
         name: str | None = None,
     ):
+        IcoLifecycleMixin.__init__(self)
+        IcoExecutionMixin.__init__(self)
+        super().__init__()
+
         operator = operator_factory()
         self.fn = operator
         self.name = name or f"ProcessWorker-{id(self)}"
-        self.children.append(operator)
+        self.children = [operator]
         self.in_queue = in_queue
         self.out_queue = out_queue
 
@@ -100,6 +109,8 @@ class ProcessWorker(
         while True:
             try:
                 message = self.in_queue.get()
+                print(f"Worker {self.name} received message: {message}")
+
                 if not isinstance(message, WorkerMessage):
                     raise TypeError(f"Invalid message type: {type(message)}")
 
@@ -108,26 +119,26 @@ class ProcessWorker(
                         # Broadcast lifecycle event to hosted operator
                         self.broadcast_event(message.payload.event)
 
-                        # Acknowledge receipt
+                        # Acknowledge lifecycle event
                         self.out_queue.put(
                             WorkerMessage.create(AcknowledgePayload(message.type))
                         )
-
-                        # Exit on cleanup event
-                        if message.payload.event == IcoLifecycleEvent.cleanup:
-                            self.progress.print(
-                                f"Worker {self.name} received cleanup event. Exiting loop."
-                            )
-                            break
 
                     case MessageType.input:
-                        # Acknowledge receipt
+                        # Acknowledge input message
                         self.out_queue.put(
                             WorkerMessage.create(AcknowledgePayload(message.type))
                         )
-
+                        print(f"Worker {self.name} acknowledged input message.")
                         # Execute operator function
                         self._call_fn(message.payload)
+
+                    case MessageType.shutdown:
+                        self.progress.print(
+                            f"Worker {self.name} received shutdown event. Exiting loop."
+                        )
+                        # Do not send ack for shutdown because process will exit and queues will be closed
+                        break
 
             except Exception as e:
                 self.progress.print(f"Worker {self.name} encountered an error: {e}")
@@ -142,7 +153,7 @@ class ProcessWorker(
         output = self(payload.input)
 
         self.progress.print(f"✔️ Worker {self.name} completed item: {payload.input}")
-
+        print(f"Worker {self.name} sending output: {output}")
         self.out_queue.put(WorkerMessage.create(OutputPayload(output)))
 
     def __call__(self, item: I) -> O:
@@ -164,30 +175,27 @@ class ProcessWorker(
 
     @staticmethod
     def spawn(
-        in_queue: Queue[WorkerMessage[Any]],
-        out_queue: Queue[WorkerMessage[Any]],
+        in_queue: WorkerQueue,
+        out_queue: WorkerQueue,
         operator_factory: Callable[[], Any],
         name: str | None = None,
+        relay_progress: bool = True,
     ) -> Process:
         # Create and start agent process
         process = Process(
             target=ProcessWorker._process_fn,
-            args=(
-                in_queue,
-                out_queue,
-                operator_factory,
-                name,
-            ),
+            args=(in_queue, out_queue, operator_factory, name, relay_progress),
         )
         process.start()
         return process
 
     @staticmethod
     def _process_fn(
-        in_queue: Queue[WorkerMessage[Any]],
-        out_queue: Queue[WorkerMessage[Any]],
+        in_queue: WorkerQueue,
+        out_queue: WorkerQueue,
         operator_factory: Callable[[], Any],
         name: str | None = None,
+        relay_progress: bool = True,
     ) -> None:
         worker = ProcessWorker[I, O](
             operator_factory=operator_factory,
@@ -195,7 +203,7 @@ class ProcessWorker(
             out_queue=out_queue,
             name=name,
         )
-        # TODO: Progress relay will forward progress back to the main process via worker's response queue.
-        # agent.progress = ProgressRelay(response_queue)
+        if relay_progress:
+            worker.progress = ProgressRelay(out_queue)
 
         worker.run_loop()
