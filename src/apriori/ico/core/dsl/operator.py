@@ -15,9 +15,6 @@ O2 = TypeVar("O2")
 class IcoOperator(
     IcoOperatorProtocol[I, O],
     Generic[I, O],
-    # IcoLifecycleMixin,  # Added lifecycle management
-    # IcoExecutionMixin[I, O],  # Added execution state tracking
-    # ProgressMixin,  # Added progress reporting
 ):
     """
     An atomic transformation unit following the ICO convention.

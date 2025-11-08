@@ -13,8 +13,8 @@ from apriori.ico.core import (
     IcoSink,
     IcoSource,
 )
-from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand
 from apriori.ico.core.runtime.progress import ProgressMixin
+from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I
 from apriori.ico.tests.core.runtime.test_utils import (
     LifecycleEventsRecordingOperator,

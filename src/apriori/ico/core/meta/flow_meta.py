@@ -6,7 +6,7 @@ from typing import Any, final
 
 from apriori.ico.core.meta.ico_form import IcoForm
 from apriori.ico.core.runtime.execution import IcoExecutionState, SupportsIcoExecution
-from apriori.ico.core.runtime.lifecycle import IcoRuntimeState, SupportsIcoRuntime
+from apriori.ico.core.runtime.types import IcoRuntimeState, SupportsIcoRuntime
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
 

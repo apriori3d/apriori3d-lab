@@ -5,7 +5,7 @@ from rich.tree import Tree
 
 from apriori.ico.core.meta.flow_meta import IcoFlowMeta
 from apriori.ico.core.runtime.execution import IcoExecutionState
-from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand, IcoRuntimeState
+from apriori.ico.core.runtime.types import IcoRuntimeCommand, IcoRuntimeState
 
 
 def describe(

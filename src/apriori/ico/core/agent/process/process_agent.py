@@ -19,8 +19,8 @@ from apriori.ico.core.agent.process.messages import (
 )
 from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.core.dsl.operator import IcoOperator
-from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand
 from apriori.ico.core.runtime.progress import ProgressMixin
+from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
 if TYPE_CHECKING:
