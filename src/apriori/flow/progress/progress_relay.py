@@ -44,11 +44,12 @@ class ProgressRelay(ProgressProtocol):
         return self._tasks
 
     @staticmethod
-    def relay_to(progress: ProgressProtocol, message: Any) -> bool:
+    def handle_message(progress: ProgressProtocol, message: Any) -> bool:
+        """Handle ProgressRelayMessage if applicable. Returns True if consumed."""
         if not isinstance(message, ProgressRelayMessage):
             return False
-        method = getattr(progress, message.progress_method.value)
-        method(*message.progress_args, **message.progress_kwargs)
+        handler = getattr(progress, message.progress_method.value)
+        handler(*message.progress_args, **message.progress_kwargs)
         return True
 
     def print(self, *objects: Any, **kw_args: Any) -> None:
