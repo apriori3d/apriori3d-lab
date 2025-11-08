@@ -13,14 +13,14 @@ from typing import Any
 import pytest
 
 from apriori.ico.core import IcoLifecycleEvent
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.agent.process.process_worker import ProcessWorker
+from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     InputPayload,
-    LifecycleEventPayload,
     MessageType,
+    RuntimeCommandPayload,
     WorkerMessage,
 )
-from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.tests.core.runtime.test_utils import (
     EchoOperator,
     WorkerQueue,
@@ -34,7 +34,7 @@ from apriori.ico.tests.core.runtime.test_utils import (
     "payload, expected_type",
     [
         (InputPayload(123), MessageType.input),
-        (LifecycleEventPayload(IcoLifecycleEvent.prepare), MessageType.lifecycle_event),
+        (RuntimeCommandPayload(IcoLifecycleEvent.prepare), MessageType.lifecycle_event),
     ],
 )
 def test_worker_acknowledges_correct_message_type(

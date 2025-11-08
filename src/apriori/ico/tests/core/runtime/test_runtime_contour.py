@@ -13,7 +13,7 @@ from apriori.ico.core import (
     IcoSink,
     IcoSource,
 )
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent
+from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand
 from apriori.ico.core.runtime.progress import ProgressMixin
 from apriori.ico.core.types import I
 from apriori.ico.tests.core.runtime.test_utils import (
@@ -82,9 +82,9 @@ def test_runtime_contour_lifecycle_event_propagation() -> None:
 
     # Both should have received the same sequence of lifecycle events
     expected = [
-        IcoLifecycleEvent.prepare,
-        IcoLifecycleEvent.reset,
-        IcoLifecycleEvent.cleanup,
+        IcoRuntimeCommand.activate,
+        IcoRuntimeCommand.reset,
+        IcoRuntimeCommand.deavtivate,
     ]
 
     assert recorded1 == expected, f"Recorder1 got {recorded1}, expected {expected}"

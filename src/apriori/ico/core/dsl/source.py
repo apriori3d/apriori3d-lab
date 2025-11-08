@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterator
 from typing import Generic, final
 
 from apriori.ico.core.dsl.operator import IcoOperator
@@ -7,16 +7,17 @@ from apriori.ico.core.types import IcoOperatorProtocol, NodeType, O
 
 @final
 class IcoSource(
-    IcoOperator[None, Iterable[O]],
-    IcoOperatorProtocol[None, Iterable[O]],
+    IcoOperator[None, Iterator[O]],
+    IcoOperatorProtocol[None, Iterator[O]],
     Generic[O],
 ):
     """
-    A data source node in the ICO DSL.
-    Produces data without requiring any input (acts as `() → Iterable[O]`).
+    A data source operator, produces a data generator without requiring any input.
+    ICO Form:
+        () → Iterator[O]
 
     Example:
-        >>> dataset = IcoSource(lambda: [1.0, 2.0, 3.0], name="dataset")
+        >>> dataset = IcoSource(lambda: (1.0, 2.0, 3.0), name="dataset")
         >>> scale = IcoOperator(lambda x: x * 2, name="scale")
         >>> to_sum = IcoOperator(sum, name="sum")
 
@@ -26,14 +27,16 @@ class IcoSource(
         12.0
     """
 
-    def __init__(self, fn: Callable[[], Iterable[O]], name: str | None = None):
-        # Note: we annotate the inner lambda explicitly to preserve type hints
-        def wrapped(_: None) -> Iterable[O]:
-            return fn()
+    generator: Callable[[], Iterator[O]]
 
+    def __init__(self, generator: Callable[[], Iterator[O]], name: str | None = None):
         super().__init__(
-            fn=wrapped,
+            fn=self._generator_fn,
             name=name,
             node_type=NodeType.source,
             children=[],
         )
+        self.generator = generator
+
+    def _generator_fn(self, _: None) -> Iterator[O]:
+        yield from self.generator()

@@ -6,7 +6,7 @@ from typing import Any, final
 
 from apriori.ico.core.meta.ico_form import IcoForm
 from apriori.ico.core.runtime.execution import IcoExecutionState, SupportsIcoExecution
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleState, SupportsIcoLifecycle
+from apriori.ico.core.runtime.lifecycle import IcoRuntimeState, SupportsIcoRuntime
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
 
@@ -28,7 +28,7 @@ class IcoFlowMeta:
     node_type: NodeType
     ico_form: IcoForm
     name: str
-    state: IcoLifecycleState | None = None
+    state: IcoRuntimeState | None = None
     exec_state: IcoExecutionState | None = None
     children: list[IcoFlowMeta] = field(default_factory=list)
 
@@ -45,7 +45,7 @@ class IcoFlowMeta:
     @staticmethod
     def from_operator(operator: IcoOperatorProtocol[Any, Any]) -> IcoFlowMeta:
         """Recursively build an IcoFlow from an operator tree."""
-        state = operator.state if isinstance(operator, SupportsIcoLifecycle) else None
+        state = operator.state if isinstance(operator, SupportsIcoRuntime) else None
         exec_state = (
             operator.exec_state if isinstance(operator, SupportsIcoExecution) else None
         )

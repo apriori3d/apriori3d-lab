@@ -19,7 +19,7 @@ from apriori.ico.core.agent.process.messages import (
 )
 from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.core.dsl.operator import IcoOperator
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent
+from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand
 from apriori.ico.core.runtime.progress import ProgressMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
@@ -139,7 +139,7 @@ class IcoProcessAgent(
         while True:
             message = self._out_queue.get(timeout=timeout)
 
-            if ProgressRelay.relay_to(self.progress, message):
+            if ProgressRelay.handle_message(self.progress, message):
                 continue  # progress message handled
 
             match message.message_type:
@@ -163,7 +163,7 @@ class IcoProcessAgent(
 
     # ─── Lifecycle coordination ───
 
-    def on_event(self, event: IcoLifecycleEvent) -> None:
+    def on_event(self, event: IcoRuntimeCommand) -> None:
         """
         Forwards lifecycle events to the worker process.
         Manages worker lifecycle on prepare/cleanup.
@@ -171,7 +171,7 @@ class IcoProcessAgent(
         super().on_event(event)
 
         match event:
-            case IcoLifecycleEvent.prepare:
+            case IcoRuntimeCommand.activate:
                 # Start fresh worker and forward prepare
                 self.worker_process = ProcessWorker[I, O].spawn(
                     mp_context=self._mp_context,
@@ -181,7 +181,7 @@ class IcoProcessAgent(
                 )
                 self._send_payload(LifecycleEventPayload(event))
 
-            case IcoLifecycleEvent.cleanup:
+            case IcoRuntimeCommand.deavtivate:
                 self._send_payload(LifecycleEventPayload(event))
                 self._send_payload(ShutdownPayload())
                 self._shutdown_worker()

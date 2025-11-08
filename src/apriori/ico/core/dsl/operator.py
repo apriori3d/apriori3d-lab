@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any, Generic, TypeVar, overload
 
-from apriori.ico.core.runtime.execution import IcoExecutionMixin
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
 # ──── Generic type variables for composition ────
@@ -17,8 +15,9 @@ O2 = TypeVar("O2")
 class IcoOperator(
     IcoOperatorProtocol[I, O],
     Generic[I, O],
-    IcoLifecycleMixin,  # Added lifecycle management
-    IcoExecutionMixin[I, O],  # Added execution state tracking
+    # IcoLifecycleMixin,  # Added lifecycle management
+    # IcoExecutionMixin[I, O],  # Added execution state tracking
+    # ProgressMixin,  # Added progress reporting
 ):
     """
     An atomic transformation unit following the ICO convention.
@@ -64,6 +63,7 @@ class IcoOperator(
     fn: Callable[[I], O]
     name: str
     node_type: NodeType
+    parent: IcoOperatorProtocol[Any, Any] | None
     children: list[IcoOperatorProtocol[Any, Any]]
 
     def __init__(
@@ -73,13 +73,16 @@ class IcoOperator(
         node_type: NodeType = NodeType.operator,
         children: list[IcoOperatorProtocol[Any, Any]] | None = None,
     ):
-        IcoLifecycleMixin.__init__(self)
-        IcoExecutionMixin.__init__(self)
+        # IcoLifecycleMixin.__init__(self)
+        # IcoExecutionMixin.__init__(self)
         super().__init__()
         self.fn = fn
         self.name = name or self.__class__.__name__
         self.node_type = node_type
+        self.parent = None
         self.children = children if children is not None else []
+        for child in self.children:
+            child.parent = self
 
     # ─── Properties ───
 
@@ -100,17 +103,16 @@ class IcoOperator(
 
     def __call__(self, item: I | None = None, *args: Any) -> O:
         if item is not None:
-            # Call for standard operator with input
-            return self.track(self.fn, item)
-
-        # Call for IcoSource with no input
-        return self.track(self.fn, None)  # type: ignore
+            return self.fn(item)
+        return self.fn(None)  # type: ignore
 
     # ─── Imperative async execution path ───
 
     async def run_async(self, item: I) -> O:
         """Asynchronous execution of the operator."""
         return self(item)
+
+    # ─── Composition of operators ───
 
     # ─── Chaining ───
 
@@ -148,8 +150,34 @@ class IcoOperator(
             yield self(x)
 
 
+# ─── Operator Wrapping Utility ───
+
+
 def wrap_operator(
     fn: Callable[[I], O],
 ) -> IcoOperatorProtocol[I, O]:
     """Wrap a callable into an IcoOperator if it is not already one."""
     return fn if isinstance(fn, IcoOperatorProtocol) else IcoOperator(fn=fn)
+
+
+# ─── Tree traversal Utilities ───
+
+
+def iterate_nodes(
+    node: IcoOperatorProtocol[Any, Any],
+) -> Iterator[IcoOperatorProtocol[Any, Any]]:
+    """Recursively yield all children operators in the flow tree."""
+    yield node
+    for c in node.children:
+        yield from iterate_nodes(c)
+
+
+def iterate_parents(
+    node: IcoOperatorProtocol[Any, Any],
+) -> Iterator[IcoOperatorProtocol[Any, Any]]:
+    """Recursively yield all parent operators in the flow tree."""
+    if node.parent is None:
+        return
+
+    yield node.parent
+    yield from iterate_parents(node.parent)

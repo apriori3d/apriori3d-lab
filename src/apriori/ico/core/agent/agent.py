@@ -4,14 +4,14 @@ import asyncio
 from typing import Generic
 
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleMixin
+from apriori.ico.core.runtime.types import IcoRuntimeMixin
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
 class IcoAgent(
     IcoOperatorProtocol[I, O],
     Generic[I, O],
-    IcoLifecycleMixin,  # Added lifecycle management
+    IcoRuntimeMixin,  # Added lifecycle management
     IcoExecutionMixin[I, O],  # Added execution state tracking
 ):
     async def run_async(self, item: I) -> O:

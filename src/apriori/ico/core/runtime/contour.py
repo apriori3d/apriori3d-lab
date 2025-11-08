@@ -8,10 +8,10 @@ from apriori.flow.progress.noop import NoOpProgress
 from apriori.flow.progress.types import ProgressProtocol
 from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.meta.ico_form import infer_ico_form
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent
-from apriori.ico.core.runtime.progress import HasProgress
+from apriori.ico.core.runtime.progress import SupportsProgress
+from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import IcoOperatorProtocol
-from apriori.ico.core.utils import iterate_nodes
+from apriori.ico.core.utils import iterate_children
 
 
 class IcoRuntimeContour(IcoOperator[None, None]):
@@ -72,17 +72,17 @@ class IcoRuntimeContour(IcoOperator[None, None]):
 
     def ready(self) -> Self:
         """Broadcast 'prepare' event through the entire flow."""
-        return self.broadcast_event(IcoLifecycleEvent.prepare)
+        return self.broadcast_event(IcoRuntimeCommand.activate)
 
     def reset(self) -> Self:
         """Broadcast 'reset' event through the entire flow."""
-        return self.broadcast_event(IcoLifecycleEvent.reset)
+        return self.broadcast_event(IcoRuntimeCommand.reset)
 
     def idle(self) -> Self:
         """Broadcast 'cleanup' event through the entire flow."""
-        return self.broadcast_event(IcoLifecycleEvent.cleanup)
+        return self.broadcast_event(IcoRuntimeCommand.deavtivate)
 
-    def broadcast_event(self, event: IcoLifecycleEvent) -> Self:
+    def broadcast_event(self, event: IcoRuntimeCommand) -> Self:
         """Propagate lifecycle event recursively."""
         super().broadcast_event(event)
         return self
@@ -99,8 +99,8 @@ class IcoRuntimeContour(IcoOperator[None, None]):
         if progress:
             self.progress = progress
 
-        for node in iterate_nodes(self.flow):
-            if isinstance(node, HasProgress):
+        for node in iterate_children(self.flow):
+            if isinstance(node, SupportsProgress):
                 node.progress = self.progress
         return self
 

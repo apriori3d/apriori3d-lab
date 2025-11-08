@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
 from apriori.ico.core.meta.ico_form import infer_ico_form
@@ -27,12 +26,3 @@ def is_source(node: IcoOperatorProtocol[Any, Any]) -> bool:
     """
     form = infer_ico_form(node)
     return form and form.i == "()" and form.o != "()"
-
-
-def iterate_nodes(
-    node: IcoOperatorProtocol[Any, Any],
-) -> Iterable[IcoOperatorProtocol[Any, Any]]:
-    """Recursively yield all operators in the flow tree."""
-    yield node
-    for c in node.children:
-        yield from iterate_nodes(c)

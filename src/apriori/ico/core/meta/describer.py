@@ -5,7 +5,7 @@ from rich.tree import Tree
 
 from apriori.ico.core.meta.flow_meta import IcoFlowMeta
 from apriori.ico.core.runtime.execution import IcoExecutionState
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleEvent, IcoLifecycleState
+from apriori.ico.core.runtime.lifecycle import IcoRuntimeCommand, IcoRuntimeState
 
 
 def describe(
@@ -52,10 +52,10 @@ def _format_label(
     if show_states:
         if flow_meta.state is not None:
             color = {
-                IcoLifecycleState.unknown: "grey50",
-                IcoLifecycleState.prepared: "yellow",
-                IcoLifecycleState.ready: "green",
-                IcoLifecycleState.cleaned: "grey70",
+                IcoRuntimeState.unknown: "grey50",
+                IcoRuntimeState.running: "yellow",
+                IcoRuntimeState.running: "green",
+                IcoRuntimeState.cleaned: "grey70",
             }.get(flow_meta.state, "white")
             text.append(f" [{flow_meta.state.name}]", style=color)
 
@@ -152,8 +152,8 @@ if __name__ == "__main__":
     # ──── 5. Combine all into the full flow ────
     full_flow = dataflow | train_stream
 
-    full_flow.broadcast_event(IcoLifecycleEvent.prepare)
-    full_flow.broadcast_event(IcoLifecycleEvent.reset)
+    full_flow.broadcast_event(IcoRuntimeCommand.activate)
+    full_flow.broadcast_event(IcoRuntimeCommand.reset)
 
     # ──── 6. Visualize ────
     flow_meta = IcoFlowMeta.from_operator(full_flow)

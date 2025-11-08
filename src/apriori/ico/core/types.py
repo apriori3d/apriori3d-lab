@@ -42,6 +42,7 @@ class IcoOperatorProtocol(Protocol[I, O]):
 
     name: str
     node_type: NodeType
+    parent: IcoOperatorProtocol[Any, Any] | None
     children: list[IcoOperatorProtocol[Any, Any]]
 
     # ─── Declarative sync execution path ───

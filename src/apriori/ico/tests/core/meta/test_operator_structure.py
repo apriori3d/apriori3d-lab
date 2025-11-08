@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core import IcoFlowMeta, IcoOperator, NodeType
+from apriori.ico.core.dsl.operator import IcoOperator
 
 
 def test_operator_structure_builds_correct_tree() -> None:

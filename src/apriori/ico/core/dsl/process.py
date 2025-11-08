@@ -21,9 +21,8 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
     ICO form:
         C → C → C   (repeated `steps` times)
 
-    Example: Fibonacci sequence as a process
-    An iterative ICO process can model recursion or
-    stateful computations.
+    Example: Fibonacci sequence as a process: an iterative ICO process can
+    model recursion or stateful computations.
 
     >>> fib_process = IcoProcess(lambda c: (c[1], c[0] + c[1]), num_iterations=8)
     >>> fib_process((0, 1))
@@ -50,7 +49,7 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
         body_op = wrap_operator(body)
 
         super().__init__(
-            fn=self._run_loop,
+            fn=self._run_loop_fn,
             name=name,
             node_type=NodeType.process,
             children=[body_op],
@@ -58,7 +57,7 @@ class IcoProcess(IcoOperator[C, C], Generic[C], IcoOperatorProtocol[C, C]):
         self.body = body_op
         self.num_iterations = num_iterations
 
-    def _run_loop(self, context: C) -> C:
+    def _run_loop_fn(self, context: C) -> C:
         for _ in range(self.num_iterations):
             context = self.body(context)
         return context

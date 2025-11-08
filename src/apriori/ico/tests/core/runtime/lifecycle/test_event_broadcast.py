@@ -2,10 +2,10 @@ from collections.abc import Callable
 from typing import Any
 
 from apriori.ico.core import IcoOperator, IcoPipeline
-from apriori.ico.core.runtime.lifecycle import (
-    IcoLifecycleEvent,
-    IcoLifecycleMixin,
-    IcoLifecycleState,
+from apriori.ico.core.runtime.types import (
+    IcoRuntimeCommand,
+    IcoRuntimeMixin,
+    IcoRuntimeState,
 )
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
@@ -29,17 +29,17 @@ def test_lifecycle_broadcast_updates_nested_states() -> None:
 
     class StatefulOp(
         IcoOperator[int, int],
-        IcoLifecycleMixin,
+        IcoRuntimeMixin,
     ):
         """A simple stateful operator that records received events."""
 
         def __init__(self, name: str):
             IcoOperator.__init__(self, lambda x: x, name=name)
-            IcoLifecycleMixin.__init__(self)
+            IcoRuntimeMixin.__init__(self)
 
-            self.events: list[IcoLifecycleEvent] = []
+            self.events: list[IcoRuntimeCommand] = []
 
-        def on_event(self, event: IcoLifecycleEvent) -> None:
+        def on_event(self, event: IcoRuntimeCommand) -> None:
             super().on_event(event)
             self.events.append(event)
 
@@ -77,22 +77,22 @@ def test_lifecycle_broadcast_updates_nested_states() -> None:
     )
 
     # ── 1. Prepare phase ──────────────────────────────
-    pipeline.broadcast_event(IcoLifecycleEvent.prepare)
+    pipeline.broadcast_event(IcoRuntimeCommand.activate)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoLifecycleState.prepared
-        assert IcoLifecycleEvent.prepare in op.events
+        assert op.state == IcoRuntimeState.running
+        assert IcoRuntimeCommand.activate in op.events
 
     # ── 2. Reset phase ────────────────────────────────
-    pipeline.broadcast_event(IcoLifecycleEvent.reset)
+    pipeline.broadcast_event(IcoRuntimeCommand.reset)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoLifecycleState.ready
-        assert IcoLifecycleEvent.reset in op.events
+        assert op.state == IcoRuntimeState.running
+        assert IcoRuntimeCommand.reset in op.events
 
     # ── 3. Cleanup phase ──────────────────────────────
-    pipeline.broadcast_event(IcoLifecycleEvent.cleanup)
+    pipeline.broadcast_event(IcoRuntimeCommand.deavtivate)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoLifecycleState.cleaned
-        assert IcoLifecycleEvent.cleanup in op.events
+        assert op.state == IcoRuntimeState.cleaned
+        assert IcoRuntimeCommand.deavtivate in op.events
 
     # Ensure stateless node never changed state (not lifecycle-aware)
     assert not hasattr(stateless, "state")

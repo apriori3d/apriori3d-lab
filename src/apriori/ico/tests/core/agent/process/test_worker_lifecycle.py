@@ -5,15 +5,15 @@ import pytest
 from apriori.ico.core import (
     IcoLifecycleEvent,
 )
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.agent.process.process_worker import ProcessWorker
+from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     InputPayload,
-    LifecycleEventPayload,
     MessageType,
     OutputPayload,
+    RuntimeCommandPayload,
     WorkerMessage,
 )
-from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.tests.core.runtime.test_utils import (
     EchoOperator,
     NestedRecordingOperator,
@@ -39,7 +39,7 @@ def test_process_worker_lifecycle_events() -> None:
 
     # Send events and verify acknowledgments
     for event in all_events:
-        in_q.put(WorkerMessage.create(LifecycleEventPayload(event)))
+        in_q.put(WorkerMessage.create(RuntimeCommandPayload(event)))
         msg = out_q.get(timeout=5)
 
         assert isinstance(msg.payload, AcknowledgePayload)
@@ -67,7 +67,7 @@ def test_process_worker_lifecycle_event_forwarding() -> None:
 
     # Events to send (excluding cleanup for now)
     for event in all_events:
-        in_q.put(WorkerMessage.create(LifecycleEventPayload(event)))
+        in_q.put(WorkerMessage.create(RuntimeCommandPayload(event)))
         msg = out_q.get(timeout=5)
         assert isinstance(msg.payload, AcknowledgePayload)
 

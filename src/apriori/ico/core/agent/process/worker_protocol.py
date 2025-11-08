@@ -3,17 +3,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.dsl.operator import IcoOperator, wrap_operator
+from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ErrorPayload,
     InputPayload,
-    LifecycleEventPayload,
     MessageType,
     OutputPayload,
+    RuntimeCommandPayload,
     ShutdownPayload,
     WorkerMessage,
 )
-from apriori.ico.core.dsl.operator import IcoOperator, wrap_operator
 from apriori.ico.core.types import I, O
 
 
@@ -65,9 +65,9 @@ class WorkerProtocol(IcoOperator[I, O]):
         output = self(payload.input)
         return WorkerMessage.create(OutputPayload(output))
 
-    def _on_lifecycle(self, payload: LifecycleEventPayload) -> WorkerMessage[Any]:
+    def _on_lifecycle(self, payload: RuntimeCommandPayload) -> WorkerMessage[Any]:
         """Apply lifecycle event."""
-        self.broadcast_event(payload.event)
+        self.broadcast_event(payload.command)
         return WorkerMessage.create(AcknowledgePayload(MessageType.lifecycle_event))
 
     def _on_shutdown(self, _: ShutdownPayload) -> WorkerMessage[Any]:

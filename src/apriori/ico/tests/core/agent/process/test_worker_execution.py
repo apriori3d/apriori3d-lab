@@ -2,7 +2,8 @@ import multiprocessing
 
 import pytest
 
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.agent.process.process_worker import ProcessWorker
+from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ExecutionStatePayload,
     InputPayload,
@@ -10,7 +11,6 @@ from apriori.ico.core.agent.process.messages import (
     OutputPayload,
     WorkerMessage,
 )
-from apriori.ico.core.agent.process.process_worker import ProcessWorker
 from apriori.ico.core.runtime.execution import IcoExecutionState
 from apriori.ico.tests.core.runtime.test_utils import (
     EchoOperator,

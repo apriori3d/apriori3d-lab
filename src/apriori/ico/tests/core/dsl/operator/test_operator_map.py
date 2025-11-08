@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from apriori.ico.core import IcoOperator
+from apriori.ico.core.dsl.operator import IcoOperator
 
 
 def test_map_applies_elementwise() -> None:

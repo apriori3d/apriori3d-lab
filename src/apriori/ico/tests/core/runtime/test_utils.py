@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 from apriori.ico.core import (
     IcoLifecycleEvent,
 )
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.runtime.channels.messages import (
     ShutdownPayload,
     WorkerMessage,
 )
-from apriori.ico.core.runtime.lifecycle import IcoLifecycleMixin
+from apriori.ico.core.runtime.types import IcoRuntimeMixin
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
 if TYPE_CHECKING:
@@ -67,7 +67,7 @@ class FailingOperator(IcoOperatorProtocol[int, int]):
 
 class LifecycleEventsRecordingOperator(
     IcoOperatorProtocol[Any, Any],
-    IcoLifecycleMixin,  # Added lifecycle support to allow event recording
+    IcoRuntimeMixin,  # Added lifecycle support to allow event recording
 ):
     """
     An operator that records all lifecycle events it receives and bypasses data flow.
@@ -83,7 +83,7 @@ class LifecycleEventsRecordingOperator(
     received_events: list[IcoLifecycleEvent]
 
     def __init__(self) -> None:
-        IcoLifecycleMixin.__init__(self)
+        IcoRuntimeMixin.__init__(self)
         super().__init__()
         # Bypass data flow
         self.fn = lambda x: x

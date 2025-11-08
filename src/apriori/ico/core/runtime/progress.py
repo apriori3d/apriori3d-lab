@@ -5,7 +5,7 @@ from apriori.flow.progress.types import ProgressProtocol
 
 
 @runtime_checkable
-class HasProgress(Protocol):
+class SupportsProgress(Protocol):
     progress: ProgressProtocol
 
 

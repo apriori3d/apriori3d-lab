@@ -4,7 +4,8 @@ from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import TYPE_CHECKING, Any, Generic, final
 
 from apriori.flow.progress.progress_relay import ProgressRelay
-from apriori.ico.core.agent.process.messages import (
+from apriori.ico.core.agent.process.worker_protocol import WorkerProtocol
+from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ErrorPayload,
     ExecutionStatePayload,
@@ -13,12 +14,11 @@ from apriori.ico.core.agent.process.messages import (
     OutputPayload,
     WorkerMessage,
 )
-from apriori.ico.core.agent.process.worker_protocol import WorkerProtocol
 from apriori.ico.core.runtime.execution import IcoExecutionMixin, IcoExecutionState
-from apriori.ico.core.runtime.lifecycle import (
-    IcoLifecycleMixin,
-)
 from apriori.ico.core.runtime.progress import ProgressMixin
+from apriori.ico.core.runtime.types import (
+    IcoRuntimeMixin,
+)
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ class ProcessWorker(
     Generic[I, O],
     #  Implements operator protocol to comply with ICO runtime
     IcoOperatorProtocol[I, O],
-    IcoLifecycleMixin,  # Added lifecycle management
+    IcoRuntimeMixin,  # Added lifecycle management
     IcoExecutionMixin[I, O],  # Added execution state tracking
     ProgressMixin,  # Added progress tracking
 ):
@@ -93,7 +93,7 @@ class ProcessWorker(
         out_queue: WorkerQueue,
         name: str | None = None,
     ):
-        IcoLifecycleMixin.__init__(self)
+        IcoRuntimeMixin.__init__(self)
         IcoExecutionMixin.__init__(self)
         super().__init__()
 
