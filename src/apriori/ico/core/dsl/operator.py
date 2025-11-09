@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from typing import Any, Generic, TypeVar, overload
 
 from apriori.ico.core.types import I, IcoOperatorProtocol, NodeType, O
@@ -130,7 +130,7 @@ class IcoOperator(
 
     # ─── Map ───
 
-    def map(self) -> IcoOperator[Iterable[I], Iterable[O]]:
+    def map(self) -> IcoOperator[Iterator[I], Iterator[O]]:
         """Apply this operator elementwise over an iterable (lazy generator):
         Iterable[I] → Iterable[O]
         """
@@ -142,7 +142,7 @@ class IcoOperator(
             children=[self],
         )
 
-    def _map_fn(self, xs: Iterable[I]) -> Iterable[O]:
+    def _map_fn(self, xs: Iterator[I]) -> Iterator[O]:
         for x in xs:
             yield self(x)
 

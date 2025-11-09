@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import queue
-from collections.abc import Iterator
 from multiprocessing import Queue
+from multiprocessing.context import SpawnContext
 from typing import TYPE_CHECKING, Any, Generic, cast, final
 
 from apriori.flow.progress.progress_relay import ProgressRelay
@@ -17,7 +17,7 @@ from apriori.ico.core.runtime.channels.messages import (
     PayloadT,
     RuntimeCommandPayload,
 )
-from apriori.ico.core.runtime.progress import ProgressMixin
+from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import (
@@ -38,21 +38,17 @@ class MPQueueChannel(
     IcoRuntimeMixin,
     IcoChannelProtocol[I],
 ):
-    send: IcoRuntimeOperatorProtocol[Iterator[I], None]
-    receive: IcoRuntimeOperatorProtocol[None, Iterator[I]]
+    send: IcoRuntimeOperatorProtocol[I, None]
+    receive: IcoRuntimeOperatorProtocol[None, I]
 
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
 
-    def __init__(
-        self,
-        *,
-        main_queue: ChannelQueue | None = None,
-        ack_queue: ChannelQueue | None = None,
-    ) -> None:
+    def __init__(self, *, mp_context: SpawnContext) -> None:
         IcoRuntimeMixin.__init__(self)
-        self._main_queue = main_queue or ChannelQueue()
-        self._ack_queue = ack_queue or ChannelQueue()
+
+        self._main_queue = mp_context.Queue()
+        self._ack_queue = mp_context.Queue()
 
         # define endpoints
         self.send = MPQueueSendOperator[I](
@@ -84,8 +80,8 @@ class MPQueueChannel(
 
 class MPQueueSendOperator(
     Generic[I],
-    IcoRuntimeOperator[Iterator[I], None],
-    IcoRuntimeOperatorProtocol[Iterator[I], None],
+    IcoRuntimeOperator[I, None],
+    IcoRuntimeOperatorProtocol[I, None],
 ):
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
@@ -100,10 +96,9 @@ class MPQueueSendOperator(
         self._main_queue = main_queue
         self._ack_queue = ack_queue
 
-    def _send_fn(self, item: Iterator[I]) -> None:
-        for input in item:
-            self._main_queue.put(InputPayload[I](input=input).wrap())
-            self._wait_for_ack(InputPayload)
+    def _send_fn(self, item: I) -> None:
+        self._main_queue.put(InputPayload[I](item).wrap())
+        self._wait_for_ack(InputPayload)
 
     def on_command(self, command: IcoRuntimeCommand) -> None:
         super().on_command(command)
@@ -126,14 +121,17 @@ class MPQueueSendOperator(
             match message.message_type:
                 case ChannelMessageType.acknowledge:
                     ack_payload = message.unwrap(AcknowledgePayload)
+
                     if ack_payload.ack_message_type != payload_type.get_message_type():
                         raise RuntimeError(
                             f"Unexpected acknowledgment: expected {payload_type.get_message_type()}, got {ack_payload.ack_message_type}"
                         )
                     return
+
                 case ChannelMessageType.error:
                     error_payload = message.unwrap(ErrorPayload)
                     raise RuntimeError(f"Remote error: {error_payload.error}")
+
                 case _:
                     raise RuntimeError(
                         f"Unexpected message type in ack queue: {message.message_type}"
@@ -142,8 +140,8 @@ class MPQueueSendOperator(
 
 class MPQueueReceiveOperator(
     Generic[I],
-    IcoRuntimeOperator[None, Iterator[I]],
-    IcoRuntimeOperatorProtocol[None, Iterator[I]],
+    IcoRuntimeOperator[None, I],
+    IcoRuntimeOperatorProtocol[None, I],
     ProgressMixin,
 ):
     main_queue: ChannelQueue
@@ -158,50 +156,61 @@ class MPQueueReceiveOperator(
         self.main_queue = main_queue
         self.ack_queue = ack_queue
 
-    def _receive_fn(self, _: None = None) -> Iterator[I]:
+    def _receive_fn(self, _: None = None) -> I:
+        """Blocking receive for a single item.
+
+        Waits until an input payload arrives, filtering out
+        runtime and progress messages. Returns the next data item.
+        """
         while True:
             try:
                 message = self.main_queue.get()
 
-                # Handle progress messages
+                # ─── Handle progress relay ───
                 if ProgressRelay.handle_message(self.progress, message):
                     continue
 
+                # ─── Validate message ───
                 if not isinstance(message, ChannelMessage):
                     raise TypeError(
                         f"Expected ChannelMessage, got {type(message).__name__}"
                     )
 
+                # ─── Handle message types ───
                 match message.message_type:
+                    # ─── Input item ───
                     case ChannelMessageType.input:
-                        # Acknowledge then yield input
                         self.ack_queue.put(
                             AcknowledgePayload(message.message_type).wrap()
                         )
-                        yield cast(I, message.payload.input)
+                        return cast(I, message.payload.input)
 
+                    # ─── Runtime command ───
                     case ChannelMessageType.runtime_command:
-                        # Broadcast command then acknowledge
                         command = message.unwrap(RuntimeCommandPayload).command
                         self.broadcast_command(command)
                         self.ack_queue.put(
                             AcknowledgePayload(message.message_type).wrap()
                         )
-                        # Stop iteration if command is stop or reset
-                        if command in [IcoRuntimeCommand.stop, IcoRuntimeCommand.reset]:
-                            raise StopIteration
 
+                        # Stop receiving if instructed
+                        if command in (
+                            IcoRuntimeCommand.stop,
+                            IcoRuntimeCommand.reset,
+                            IcoRuntimeCommand.deactivate,
+                        ):
+                            raise RuntimeError("Receiving halted by runtime command")
+
+                    # ─── Remote error ───
                     case ChannelMessageType.error:
-                        raise RuntimeError(
-                            f"Remote error: {cast(ErrorPayload, message.payload).error}"
-                        )
+                        error = message.unwrap(ErrorPayload).error
+                        raise RuntimeError(f"Remote error: {error}")
 
+                    # ─── Ignore unknown ───
                     case _:
-                        # Ignore other message types
                         continue
 
-            except StopIteration:
-                return  # Exit the generator
             except Exception as e:
+                # Report local failure to the peer
                 self.ack_queue.put(ErrorPayload(repr(e)).wrap())
                 raise

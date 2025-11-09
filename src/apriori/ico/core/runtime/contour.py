@@ -1,20 +1,18 @@
-from __future__ import annotations
-
-from typing import Any
-
 from typing_extensions import Self
 
-from apriori.flow.progress.noop import NoOpProgress
-from apriori.flow.progress.types import ProgressProtocol
-from apriori.ico.core.dsl.operator import IcoOperator
+from apriori.ico.core.dsl.operator import iterate_nodes
 from apriori.ico.core.meta.ico_form import infer_ico_form
-from apriori.ico.core.runtime.progress import SupportsProgress
+from apriori.ico.core.runtime.progress.mixin import ProgressMixin
+from apriori.ico.core.runtime.progress.types import ProgressProtocol, SupportsProgress
+from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import IcoOperatorProtocol
-from apriori.ico.core.utils import iterate_children
 
 
-class IcoRuntimeContour(IcoOperator[None, None]):
+class IcoRuntimeContour(
+    IcoRuntimeOperator[None, None],
+    ProgressMixin,
+):
     """
     Runtime contour that encapsulates a complete ICO flow.
 
@@ -49,19 +47,25 @@ class IcoRuntimeContour(IcoOperator[None, None]):
 
     """
 
-    flow: IcoOperatorProtocol[None, None]
-    progress: ProgressProtocol = NoOpProgress()
+    _closure: IcoOperatorProtocol[None, None]
 
-    def __init__(self, flow: IcoOperatorProtocol[None, None]) -> None:
-        # Contour executes the given flow as () → ()
-        self._validate_flow(flow)
+    def __init__(
+        self,
+        closure: IcoOperatorProtocol[None, None],
+        name: str | None = None,
+    ) -> None:
+        # Contour executes the given closure e.g. flow () → ()
+        self._validate_flow(closure)
 
-        super().__init__(
-            fn=lambda _: flow(None), name="RuntimeContour", children=[flow]
-        )
-        self.flow = flow
+        super().__init__(fn=self._run_fn, name=name, children=[closure])
+
+        closure.parent = self
+        self._closure = closure
 
     # ─── Execution ───
+
+    def _run_fn(self, _: None) -> None:
+        self._closure(None)
 
     def run(self) -> Self:
         """Execute the contour by calling itself."""
@@ -70,44 +74,57 @@ class IcoRuntimeContour(IcoOperator[None, None]):
 
     # ─── Lifecycle ───
 
-    def ready(self) -> Self:
-        """Broadcast 'prepare' event through the entire flow."""
-        return self.broadcast_event(IcoRuntimeCommand.activate)
+    def activate(self) -> Self:
+        """Broadcast 'activate' event through the entire flow."""
+        self.broadcast_command(IcoRuntimeCommand.activate)
+        return self
 
     def reset(self) -> Self:
         """Broadcast 'reset' event through the entire flow."""
-        return self.broadcast_event(IcoRuntimeCommand.reset)
+        self.broadcast_command(IcoRuntimeCommand.reset)
+        return self
 
-    def idle(self) -> Self:
-        """Broadcast 'cleanup' event through the entire flow."""
-        return self.broadcast_event(IcoRuntimeCommand.deavtivate)
+    def deactivate(self) -> Self:
+        """Broadcast 'deactivate' event through the entire flow."""
+        self.broadcast_command(IcoRuntimeCommand.deactivate)
+        return self
 
-    def broadcast_event(self, event: IcoRuntimeCommand) -> Self:
-        """Propagate lifecycle event recursively."""
-        super().broadcast_event(event)
+    def pause(self) -> Self:
+        """Broadcast 'pause' event through the entire flow."""
+        self.broadcast_command(IcoRuntimeCommand.pause)
+        return self
+
+    def resume(self) -> Self:
+        """Broadcast 'resume' event through the entire flow."""
+        self.broadcast_command(IcoRuntimeCommand.resume)
+        return self
+
+    def stop(self) -> Self:
+        """Broadcast 'stop' event through the entire flow."""
+        self.broadcast_command(IcoRuntimeCommand.stop)
         return self
 
     # ─── Progress ───
 
-    def bind_progress(self, progress: ProgressProtocol | None = None) -> Self:
+    def attach_progress(self, progress: ProgressProtocol) -> Self:
         """
         Bind a shared progress relay to all progress-capable nodes.
 
         Returns:
             Self — allows chaining: contour.bind_progress().ready().run().idle()
         """
-        if progress:
-            self.progress = progress
+        self.progress = progress
 
-        for node in iterate_children(self.flow):
+        for node in iterate_nodes(self._closure):
             if isinstance(node, SupportsProgress):
                 node.progress = self.progress
+
         return self
 
     # ─── Internal utilities ───
 
     def _validate_flow(self, flow: IcoOperatorProtocol[Any, Any]) -> None:
-        """Validate that the flow begins and ends with unit types (() → ())."""
+        """Validate that the flow is a closure: begins and ends with unit types (() → ())."""
         form = infer_ico_form(flow)
         if not (form.i == "()" and form.o == "()"):
             raise ValueError(

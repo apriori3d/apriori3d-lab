@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from enum import Enum, auto
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
@@ -9,6 +9,11 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 I = TypeVar("I")  # noqa: E741
 C = TypeVar("C")
 O = TypeVar("O")  # noqa: E741
+
+# ──── Generic type variables for composition ────
+
+I2 = TypeVar("I2")
+O2 = TypeVar("O2")
 
 
 # ─── Node Types ───
@@ -52,3 +57,15 @@ class IcoOperatorProtocol(Protocol[I, O]):
     # ─── Imperative async execution path ───
 
     async def run_async(self, item: I) -> O: ...
+
+    # ─── Operator composition ───
+
+    def chain(
+        self, other: IcoOperatorProtocol[O, O2]
+    ) -> IcoOperatorProtocol[I, O2]: ...
+
+    def __or__(
+        self, other: IcoOperatorProtocol[O, O2]
+    ) -> IcoOperatorProtocol[I, O2]: ...
+
+    def map(self) -> IcoOperatorProtocol[Iterator[I], Iterator[O]]: ...

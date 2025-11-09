@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from typing import Protocol
 
 from apriori.ico.core.runtime.types import (
@@ -12,8 +11,8 @@ class IcoChannelProtocol(Protocol[I], SupportsIcoRuntime):
     """
     Runtime communication channel connecting two ICO contours.
 
-    Send: Iterator[I] → ()
-    Receive: () → Iterator[I]
+    Send: I → ()
+    Receive: () → I
 
     Responsibilities:
       • Transmit data and runtime events downstream (via send)
@@ -32,10 +31,10 @@ class IcoChannelProtocol(Protocol[I], SupportsIcoRuntime):
 
     # --- Data transmission endpoints ---
 
-    send: IcoRuntimeOperatorProtocol[Iterator[I], None]
+    send: IcoRuntimeOperatorProtocol[I, None]
     """Operator responsible for pushing data and runtime events downstream."""
 
-    receive: IcoRuntimeOperatorProtocol[None, Iterator[I]]
+    receive: IcoRuntimeOperatorProtocol[None, I]
     """Operator responsible for pulling data and runtime events upstream."""
 
     def attach_runtime(
