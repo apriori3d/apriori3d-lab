@@ -2,12 +2,12 @@ from typing import Protocol
 
 from apriori.ico.core.runtime.types import (
     IcoRuntimeOperatorProtocol,
-    SupportsIcoRuntime,
+    IcoRuntimeProtocol,
 )
 from apriori.ico.core.types import I
 
 
-class IcoChannelProtocol(Protocol[I], SupportsIcoRuntime):
+class IcoChannelProtocol(Protocol[I], IcoRuntimeProtocol):
     """
     Runtime communication channel connecting two ICO contours.
 
@@ -36,7 +36,3 @@ class IcoChannelProtocol(Protocol[I], SupportsIcoRuntime):
 
     receive: IcoRuntimeOperatorProtocol[None, I]
     """Operator responsible for pulling data and runtime events upstream."""
-
-    def attach_runtime(
-        self, contour: IcoRuntimeOperatorProtocol[None, None]
-    ) -> None: ...

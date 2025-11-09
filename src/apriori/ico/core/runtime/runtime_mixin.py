@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.types import (
     IcoRuntimeCommand,
+    IcoRuntimeProtocol,
     IcoRuntimeState,
-    SupportsIcoRuntime,
 )
 from apriori.ico.core.types import IcoOperatorProtocol
 
@@ -36,11 +37,13 @@ class IcoRuntimeMixin:
 
     _state: IcoRuntimeState
     _last_command: IcoRuntimeCommand | None
+    _last_event: IcoRuntimeEvent | None
 
     def __init__(self) -> None:
         super().__init__()
         self._state = IcoRuntimeState.inactive
         self._last_command = None
+        self._last_event = None
 
     # ─── Properties ───
 
@@ -54,6 +57,11 @@ class IcoRuntimeMixin:
         """Last received runtime command."""
         return self._last_command
 
+    @property
+    def last_event(self) -> IcoRuntimeEvent | None:
+        """Last received runtime event."""
+        return self._last_event
+
     # ─── Command Handling ───
 
     def on_command(self, command: IcoRuntimeCommand) -> None:
@@ -66,7 +74,7 @@ class IcoRuntimeMixin:
         self._state = COMMAND_TO_STATE.get(command, self._state)
         self._last_command = command
 
-    # ─── Recursive Broadcast ───
+    # ─── Command propagation ───
 
     @staticmethod
     def broadcast_command_static(
@@ -78,22 +86,35 @@ class IcoRuntimeMixin:
 
         Each node implementing `SupportsIcoRuntime` receives `on_command(command)`.
         """
-        if isinstance(operator, SupportsIcoRuntime):
+        if isinstance(operator, IcoRuntimeProtocol):
             operator.on_command(command)
 
         for child in getattr(operator, "children", []):
             IcoRuntimeMixin.broadcast_command_static(child, command)
 
+    # ─── Event Handling ───
+
+    def on_event(self, event: IcoRuntimeEvent) -> None:
+        """
+        Handle a single runtime event.
+
+        Subclasses may override to implement additional behavior
+        (e.g., logging, metrics, or alerting).
+        """
+        self._last_event = event
+
+    # ─── Event propagation ───
+
     @staticmethod
-    def bubble_command_static(
-        operator: IcoOperatorProtocol[Any, Any], command: IcoRuntimeCommand
+    def bubble_event_static(
+        operator: IcoOperatorProtocol[Any, Any], event: IcoRuntimeEvent
     ) -> None:
         """
-        Propagate a runtime command upward until a contour or agent host is reached.
+        Propagate a runtime event upward until a contour or agent host is reached.
         """
         node = operator
         while node.parent is not None:
             node = node.parent
-            if isinstance(node, SupportsIcoRuntime):
-                node.on_command(command)
+            if isinstance(node, IcoRuntimeProtocol):
+                node.on_event(event)
                 break

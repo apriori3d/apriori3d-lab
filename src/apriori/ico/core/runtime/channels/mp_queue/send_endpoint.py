@@ -1,0 +1,162 @@
+# apriori/ico/core/runtime/mp_queue_channel.py
+from __future__ import annotations
+
+import queue
+from collections.abc import Callable
+from multiprocessing import Queue
+from typing import TYPE_CHECKING, Generic, cast, final
+
+from apriori.ico.core.runtime.channels.messages import (
+    AcknowledgePayload,
+    ChannelMessage,
+    ChannelMessagePayload,
+    ChannelMessageType,
+    InputPayload,
+    RuntimeCommandPayload,
+    RuntimeEventPayload,
+)
+from apriori.ico.core.runtime.events import IcoRuntimeEvent
+from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
+from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
+from apriori.ico.core.runtime.types import (
+    IcoRuntimeCommand,
+    IcoRuntimeOperatorProtocol,
+)
+from apriori.ico.core.types import I, NodeType
+
+if TYPE_CHECKING:
+    ChannelQueue = Queue[ChannelMessage]
+else:
+    ChannelQueue = Queue  # noqa: F401
+
+
+@final
+class MPQueueSendEndpoint(
+    Generic[I],
+    IcoRuntimeOperator[I, None],
+    IcoRuntimeOperatorProtocol[I, None],
+):
+    """
+    SendEndpoint for multiprocessing Queue-based communication.
+
+    Responsibilities:
+      • Wrap data and control messages into ChannelMessage envelopes
+      • Send them through the main queue
+      • Wait for acknowledgment (ACK)
+      • React to runtime events (faults, metrics, etc.)
+    """
+
+    _main_queue: ChannelQueue
+    _ack_queue: ChannelQueue
+
+    def __init__(self, main_queue: ChannelQueue, ack_queue: ChannelQueue) -> None:
+        IcoRuntimeMixin.__init__(self)
+        super().__init__(
+            fn=self._send_fn,
+            name="mp_queue_send",
+            node_type=NodeType.operator,
+        )
+        self._main_queue = main_queue
+        self._ack_queue = ack_queue
+
+    # ────────────────────────────────
+    # Main send function
+    # ────────────────────────────────
+    def _send_fn(self, item: I) -> None:
+        """Send a single data item downstream."""
+        self._send_input(item)
+
+    # ────────────────────────────────
+    # Command & Event Propagation
+    # ────────────────────────────────
+    def on_command(self, command: IcoRuntimeCommand) -> None:
+        """Propagate runtime commands (activate/reset/stop) downstream."""
+        super().on_command(command)
+        self._send_command(command)
+
+    def on_event(self, event: IcoRuntimeEvent) -> None:
+        """Propagate runtime events (progress, fault, etc.) downstream."""
+        super().on_event(event)
+        self._send_event(event)
+
+    # ────────────────────────────────
+    # Handlers
+    # ────────────────────────────────
+    def _send_input(self, item: I) -> None:
+        """Handle sending of data items."""
+        payload = InputPayload(item)
+        self._send(payload)
+
+    def _send_command(self, command: IcoRuntimeCommand) -> None:
+        """Handle sending of runtime commands."""
+        payload = RuntimeCommandPayload(command)
+        self._send(payload)
+
+    def _send_event(self, event: IcoRuntimeEvent) -> None:
+        """Handle sending of runtime events."""
+        payload = RuntimeEventPayload(event)
+        self._send(payload)
+
+    # ────────────────────────────────
+    # Core send logic
+    # ────────────────────────────────
+    def _send(self, payload: ChannelMessagePayload, timeout: int = 5) -> None:
+        """Send a payload and wait for acknowledgment."""
+        message = payload.wrap()
+        self._main_queue.put(message)
+        self._wait_for_ack(message, timeout)
+
+    def _wait_for_ack(self, pending_message: ChannelMessage, timeout: int = 5) -> None:
+        """Wait for acknowledgment or handle runtime events from peer."""
+        while True:
+            try:
+                message = self._ack_queue.get(timeout=timeout)
+
+            except queue.Empty as e:
+                raise TimeoutError(
+                    f"No ACK received for {type(pending_message.payload).__name__} within {timeout}s"
+                ) from e
+
+            if not isinstance(message, ChannelMessage):
+                raise TypeError(
+                    f"Expected ChannelMessage, got {type(message).__name__}"
+                )
+
+            handler = self._ack_dispatch_table().get(message.message_type)
+            if handler:
+                handler(message, pending_message)
+                return  # Exit once handler confirms success
+
+            raise RuntimeError(
+                f"Unexpected message type in ACK queue: {message.message_type}"
+            )
+
+    # ────────────────────────────────
+    # ACK Handlers
+    # ────────────────────────────────
+
+    def _ack_dispatch_table(
+        self,
+    ) -> dict[ChannelMessageType, Callable[[ChannelMessage, ChannelMessage], None]]:
+        """Mapping of message types to acknowledgment handlers."""
+        return {
+            ChannelMessageType.acknowledge: self._handle_ack,
+            ChannelMessageType.runtime_event: self._handle_runtime_event,
+        }
+
+    def _handle_ack(
+        self, message: ChannelMessage, pending_message: ChannelMessage
+    ) -> None:
+        """Confirm acknowledgment matches the pending message."""
+        ack_payload = cast(AcknowledgePayload, message.unwrap())
+        if ack_payload.ack_message_type != pending_message.message_type:
+            raise RuntimeError(
+                f"Unexpected ACK: expected {pending_message.message_type}, got {ack_payload.ack_message_type}"
+            )
+
+    def _handle_runtime_event(self, message: ChannelMessage, _: ChannelMessage) -> None:
+        """Handle runtime events received while waiting for ACK."""
+        payload = cast(RuntimeEventPayload, message.unwrap())
+        event = payload.event
+        event.raise_if_fault()
+        raise RuntimeError(f"Unexpected runtime event during ACK wait: {event.type}")

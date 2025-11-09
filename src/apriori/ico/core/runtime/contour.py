@@ -1,3 +1,5 @@
+from typing import Any
+
 from typing_extensions import Self
 
 from apriori.ico.core.dsl.operator import iterate_nodes
@@ -55,11 +57,11 @@ class IcoRuntimeContour(
         name: str | None = None,
     ) -> None:
         # Contour executes the given closure e.g. flow () → ()
-        self._validate_flow(closure)
+        self._validate_closure(closure)
 
-        super().__init__(fn=self._run_fn, name=name, children=[closure])
+        super().__init__(fn=self._run_fn, name=name)
 
-        closure.parent = self
+        self.connect_runtime(closure)
         self._closure = closure
 
     # ─── Execution ───
@@ -123,7 +125,7 @@ class IcoRuntimeContour(
 
     # ─── Internal utilities ───
 
-    def _validate_flow(self, flow: IcoOperatorProtocol[Any, Any]) -> None:
+    def _validate_closure(self, flow: IcoOperatorProtocol[Any, Any]) -> None:
         """Validate that the flow is a closure: begins and ends with unit types (() → ())."""
         form = infer_ico_form(flow)
         if not (form.i == "()" and form.o == "()"):

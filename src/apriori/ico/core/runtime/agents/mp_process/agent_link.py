@@ -8,6 +8,7 @@ from typing import Generic
 from apriori.ico.core.runtime.agents.mp_process.agent import MPProcessAgent
 from apriori.ico.core.runtime.channel import IcoChannelProtocol
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import (
     IcoRuntimeCommand,
@@ -19,6 +20,7 @@ from apriori.ico.core.types import I, IcoOperatorProtocol, O
 class MPProcessAgentLink(
     Generic[I, O],
     IcoRuntimeOperator[Iterator[I], Iterator[O]],
+    ProgressMixin,
     IcoRuntimeOperatorProtocol[Iterator[I], Iterator[O]],
 ):
     # Channels composing this link
@@ -39,13 +41,18 @@ class MPProcessAgentLink(
         super().__init__(
             fn=self._link_fn,
             name=name,
-            children=[input_channel.send],  # to broadcast runtime commands
         )
         self._mp_context = mp_context
         self._flow_factory = flow_factory
         self._input_channel = input_channel
         self._output_channel = output_channel
         self._agent_process = None
+
+        # Attach two enpoints for command propagation.
+        # Input channel will broadcast commands downstream to the agent and further to the contour.
+        # Output channel.receive will handle upsteam commands (e.g. deactivate to close queues).
+        self.connect_runtime(input_channel.send)
+        self.connect_runtime(output_channel.receive)
 
     def _link_fn(self, items: Iterator[I]) -> Iterator[O]:
         for item in items:
@@ -58,7 +65,11 @@ class MPProcessAgentLink(
         match command:
             case IcoRuntimeCommand.activate:
                 self._agent_process = self._spawn_agent()
-                # active command to the agent will be sent by input_channel.send() operator
+
+            case IcoRuntimeCommand.deactivate:
+                self._shutdown_agent()
+
+    # ─── Agent process management ───
 
     def _spawn_agent(self) -> SpawnProcess:
         return MPProcessAgent.spawn(
@@ -68,7 +79,40 @@ class MPProcessAgentLink(
             flow_factory=self._flow_factory,
         )
 
-        # ─── Factory helper ───
+    def _shutdown_agent(self) -> None:
+        if self._agent_process is None:
+            return
+        try:
+            # Gracefully join the worker process
+            if self._agent_process.is_alive():
+                # Notify agent to shutdown befor closing agent process and channels queues
+                self._input_channel.send.broadcast_command(IcoRuntimeCommand.deactivate)
+
+                # Wait for agent process to exit
+                self._agent_process.join(timeout=5)
+
+                # Note: Queues will be closed by the channels themselves after command propagation downstream
+                print(f"Process Agent {self.name} worker joined.")
+
+                # Check if worker exited properly
+                if self._agent_process.exitcode is None:
+                    self.progress.print("⚠️ Worker did not exit (possibly stuck)")
+
+                elif self._agent_process.exitcode != 0:
+                    self.progress.print(
+                        f"⚠️ Process Agent {self.name} worker exited with code {self._agent_process.exitcode}."
+                    )
+        except Exception as e:
+            self.progress.print(f"❌ Error while stopping agent {self.name}: {e}")
+
+        finally:
+            if self._agent_process.is_alive():
+                self.progress.print(
+                    f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
+                )
+                self._agent_process.terminate()
+
+    # ─── Factory helper ───
 
     @classmethod
     def create_with_context(
