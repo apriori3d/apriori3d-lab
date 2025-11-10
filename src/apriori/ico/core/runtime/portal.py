@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from typing import Generic, final
 
 from apriori.ico.core.dsl.operator import IcoOperator
-from apriori.ico.core.runtime.agent_link import IcoAgentLinkProtocol
+from apriori.ico.core.runtime.agents.types import IcoAgentLinkProtocol
 from apriori.ico.core.runtime.types import IcoRuntimeHost, IcoRuntimeProtocol
 from apriori.ico.core.types import I, O
 
@@ -25,9 +25,8 @@ class IcoPortal(
 
     def _portal_fn(self, items: Iterator[I]) -> Iterator[O]:
         for item in items:
-            yield self._agent_link.output_channel.receive(
-                self._agent_link.input_channel.send(item)
-            )
+            self._agent_link.input_channel.send(item)
+            yield self._agent_link.output_channel.receive(None)
 
     @property
     def runtime(self) -> IcoRuntimeProtocol:

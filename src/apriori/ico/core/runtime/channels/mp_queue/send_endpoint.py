@@ -7,7 +7,6 @@ from multiprocessing import Queue
 from typing import TYPE_CHECKING, Generic, cast, final
 
 from apriori.ico.core.dsl.operator import IcoOperator
-from apriori.ico.core.runtime.channel import IcoSendEndpointProtocol
 from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ChannelMessage,
@@ -17,6 +16,7 @@ from apriori.ico.core.runtime.channels.messages import (
     RuntimeCommandPayload,
     RuntimeEventPayload,
 )
+from apriori.ico.core.runtime.channels.types import IcoSendEndpointProtocol
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.types import (

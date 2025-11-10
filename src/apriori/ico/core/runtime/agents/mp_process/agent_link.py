@@ -5,10 +5,11 @@ from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import Generic, final
 
-from apriori.ico.core.runtime.agent_link import IcoAgentLinkMixin, IcoAgentLinkProtocol
+from apriori.ico.core.runtime.agents.agent_link import IcoAgentLinkMixin
 from apriori.ico.core.runtime.agents.mp_process.agent import MPProcessAgent
-from apriori.ico.core.runtime.channel import IcoChannelProtocol
+from apriori.ico.core.runtime.agents.types import IcoAgentLinkProtocol
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I, IcoOperatorProtocol, O

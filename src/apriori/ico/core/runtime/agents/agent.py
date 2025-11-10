@@ -1,20 +1,12 @@
 from __future__ import annotations
 
-from typing import Generic, Protocol
+from typing import Generic
 
-from apriori.ico.core.runtime.channel import IcoChannelProtocol
+from apriori.ico.core.runtime.agents.types import IcoAgentProtocol
+from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
 from apriori.ico.core.runtime.contour import IcoRuntimeContour
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
-from apriori.ico.core.runtime.types import IcoRuntimeProtocol
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
-
-
-class IcoAgentProtocol(
-    Protocol[I, O],
-    IcoRuntimeProtocol,
-):
-    input_channel: IcoChannelProtocol[I]
-    output_channel: IcoChannelProtocol[O]
 
 
 class IcoAgent(

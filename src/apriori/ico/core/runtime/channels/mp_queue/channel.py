@@ -5,11 +5,6 @@ from multiprocessing import Queue
 from multiprocessing.context import SpawnContext
 from typing import TYPE_CHECKING, Generic, final
 
-from apriori.ico.core.runtime.channel import (
-    IcoChannelProtocol,
-    IcoReceiveEndpointProtocol,
-    IcoSendEndpointProtocol,
-)
 from apriori.ico.core.runtime.channels.messages import (
     ChannelMessage,
 )
@@ -17,6 +12,11 @@ from apriori.ico.core.runtime.channels.mp_queue.receive_endpoint import (
     MPQueueReceiveEndpoint,
 )
 from apriori.ico.core.runtime.channels.mp_queue.send_endpoint import MPQueueSendEndpoint
+from apriori.ico.core.runtime.channels.types import (
+    IcoChannelProtocol,
+    IcoReceiveEndpointProtocol,
+    IcoSendEndpointProtocol,
+)
 from apriori.ico.core.types import I
 
 if TYPE_CHECKING:

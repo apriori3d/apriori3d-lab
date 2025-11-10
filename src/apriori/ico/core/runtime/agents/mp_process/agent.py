@@ -6,8 +6,9 @@ from typing import Generic, final
 
 from typing_extensions import Self
 
-from apriori.ico.core.runtime.agent import IcoAgent, IcoAgentProtocol
-from apriori.ico.core.runtime.channel import IcoChannelProtocol
+from apriori.ico.core.runtime.agents.agent import IcoAgent
+from apriori.ico.core.runtime.agents.types import IcoAgentProtocol
+from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
 from apriori.ico.core.runtime.contour import IcoRuntimeContour
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.exceptions import IcoStopExecutionSignal
