@@ -3,38 +3,43 @@ from __future__ import annotations
 from typing import Generic, Protocol
 
 from apriori.ico.core.runtime.channel import IcoChannelProtocol
-from apriori.ico.core.runtime.types import (
-    IcoRuntimeOperatorProtocol,
-)
+from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
+from apriori.ico.core.runtime.types import IcoRuntimeCommand, IcoRuntimeProtocol
 from apriori.ico.core.types import I, O
 
 
-class AgentLinkProtocol(
-    IcoRuntimeOperatorProtocol[I, O],
-    Protocol,
-    Generic[I, O],
+class IcoAgentLinkProtocol(
+    Protocol[I, O],
+    IcoRuntimeProtocol,
 ):
-    """
-    Runtime operator bridging host and agent contours.
-
-    Purpose:
-        Acts as the runtime bridge between two independent contours:
-          • Host → Agent (input channel)
-          • Agent → Host (output channel)
-        Each channel is itself a runtime operator participating in
-        the event propagation system.
-
-    ICO form:
-        I → O
-        send: I → ()
-        receive: () → O
-
-    Runtime semantics:
-        • on_command(command) — manage lifecycle (activate/deactivate)
-        • broadcast_command(command) — propagate downward to channels
-        • bubble_command(command) — send upward to host contour
-    """
-
-    # Channels composing this link
     input_channel: IcoChannelProtocol[I]
     output_channel: IcoChannelProtocol[O]
+
+
+class IcoAgentLinkMixin(
+    Generic[I, O],
+    IcoRuntimeMixin,
+    IcoAgentLinkProtocol[I, O],
+):
+    input_channel: IcoChannelProtocol[I]
+    output_channel: IcoChannelProtocol[O]
+
+    def __init__(
+        self,
+        input_channel: IcoChannelProtocol[I],
+        output_channel: IcoChannelProtocol[O],
+    ) -> None:
+        super().__init__()
+        self.input_channel = input_channel
+        self.output_channel = output_channel
+
+        output_channel.receive.event_port = self.on_event
+
+    def on_command(self, command: IcoRuntimeCommand) -> None:
+        super().on_command(command)
+
+        self.input_channel.send.send_command(command)
+
+        if command == IcoRuntimeCommand.deactivate:
+            self.input_channel.send.close()
+            self.output_channel.receive.close()

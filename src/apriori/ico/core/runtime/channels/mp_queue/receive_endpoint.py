@@ -6,6 +6,8 @@ from multiprocessing import Queue
 from typing import TYPE_CHECKING, Generic, cast, final
 
 from apriori.flow.progress.progress_relay import ProgressRelay
+from apriori.ico.core.dsl.operator import IcoOperator
+from apriori.ico.core.runtime.channel import IcoReceiveEndpointProtocol
 from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ChannelMessage,
@@ -17,11 +19,7 @@ from apriori.ico.core.runtime.channels.messages import (
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.exceptions import IcoRuntimeError, IcoStopExecutionSignal
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
-from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
-from apriori.ico.core.runtime.types import (
-    IcoRuntimeCommand,
-    IcoRuntimeOperatorProtocol,
-)
+from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I
 
 if TYPE_CHECKING:
@@ -33,8 +31,8 @@ else:
 @final
 class MPQueueReceiveEndpoint(
     Generic[I],
-    IcoRuntimeOperator[None, I],
-    IcoRuntimeOperatorProtocol[None, I],
+    IcoOperator[None, I],
+    IcoReceiveEndpointProtocol[I],
     ProgressMixin,
 ):
     """
@@ -47,6 +45,9 @@ class MPQueueReceiveEndpoint(
       • Acknowledge receipt to the sender
     """
 
+    command_port: Callable[[IcoRuntimeCommand], None] | None
+    event_port: Callable[[IcoRuntimeEvent], None] | None
+
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
 
@@ -55,6 +56,8 @@ class MPQueueReceiveEndpoint(
             fn=self._receive_fn,
             name="mp_queue_receive",
         )
+        self.command_port = None
+        self.event_port = None
         self._main_queue = main_queue
         self._ack_queue = ack_queue
 
@@ -131,7 +134,9 @@ class MPQueueReceiveEndpoint(
         command = payload.command
 
         # Propagate downstream before acknowledging
-        self.broadcast_command(command)
+        if self.command_port is not None:
+            self.command_port(command)
+
         self._ack(ChannelMessageType.runtime_command)
 
         # Stop or deactivate ends receive loop
@@ -142,30 +147,23 @@ class MPQueueReceiveEndpoint(
         """Handle runtime events (faults, metrics, progress, etc.)."""
         payload = cast(RuntimeEventPayload, message.unwrap())
         event = payload.event
+        # Event is fire and forget, acknowledge immediately
         self._ack(ChannelMessageType.runtime_event)
 
         if event.is_fault:
             event.raise_if_fault()
-        else:
-            self.broadcast_event(event)
-
-    # ────────────────────────────────
-    # Runtime command handling
-    # ────────────────────────────────
-
-    def on_command(self, command: IcoRuntimeCommand) -> None:
-        """Handle deactivate to close queues."""
-        super().on_command(command)
-
-        if command is IcoRuntimeCommand.deactivate:
-            self._main_queue.close()
-            self._main_queue.join_thread()
-            self._ack_queue.close()
-            self._ack_queue.join_thread()
+        elif self.event_port is not None:
+            self.event_port(event)
 
     # ────────────────────────────────
     # Utilities
     # ────────────────────────────────
+
+    def close(self) -> None:
+        self._main_queue.close()
+        self._main_queue.join_thread()
+        self._ack_queue.close()
+        self._ack_queue.join_thread()
 
     def _ack(self, msg_type: ChannelMessageType) -> None:
         """Send acknowledgment to the sender."""

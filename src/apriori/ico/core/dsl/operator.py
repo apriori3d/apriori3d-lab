@@ -66,6 +66,7 @@ class IcoOperator(
     def __init__(
         self,
         fn: Callable[[I], O],
+        *,
         name: str | None = None,
         node_type: NodeType = NodeType.operator,
         children: list[IcoOperatorProtocol[Any, Any]] | None = None,

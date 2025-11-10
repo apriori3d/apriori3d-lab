@@ -6,6 +6,8 @@ from collections.abc import Callable
 from multiprocessing import Queue
 from typing import TYPE_CHECKING, Generic, cast, final
 
+from apriori.ico.core.dsl.operator import IcoOperator
+from apriori.ico.core.runtime.channel import IcoSendEndpointProtocol
 from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ChannelMessage,
@@ -16,11 +18,9 @@ from apriori.ico.core.runtime.channels.messages import (
     RuntimeEventPayload,
 )
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
-from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
-from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
+from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.types import (
     IcoRuntimeCommand,
-    IcoRuntimeOperatorProtocol,
 )
 from apriori.ico.core.types import I, NodeType
 
@@ -33,8 +33,9 @@ else:
 @final
 class MPQueueSendEndpoint(
     Generic[I],
-    IcoRuntimeOperator[I, None],
-    IcoRuntimeOperatorProtocol[I, None],
+    IcoOperator[I, None],
+    IcoSendEndpointProtocol[I],
+    ProgressMixin,
 ):
     """
     SendEndpoint for multiprocessing Queue-based communication.
@@ -50,7 +51,6 @@ class MPQueueSendEndpoint(
     _ack_queue: ChannelQueue
 
     def __init__(self, main_queue: ChannelQueue, ack_queue: ChannelQueue) -> None:
-        IcoRuntimeMixin.__init__(self)
         super().__init__(
             fn=self._send_fn,
             name="mp_queue_send",
@@ -66,33 +66,21 @@ class MPQueueSendEndpoint(
         """Send a single data item downstream."""
         self._send_input(item)
 
-    # ────────────────────────────────
-    # Command & Event Propagation
-    # ────────────────────────────────
-    def on_command(self, command: IcoRuntimeCommand) -> None:
-        """Propagate runtime commands (activate/reset/stop) downstream."""
-        super().on_command(command)
-        self._send_command(command)
-
-    def on_event(self, event: IcoRuntimeEvent) -> None:
-        """Propagate runtime events (progress, fault, etc.) downstream."""
-        super().on_event(event)
-        self._send_event(event)
-
-    # ────────────────────────────────
-    # Handlers
-    # ────────────────────────────────
     def _send_input(self, item: I) -> None:
         """Handle sending of data items."""
         payload = InputPayload(item)
         self._send(payload)
 
-    def _send_command(self, command: IcoRuntimeCommand) -> None:
+    # ────────────────────────────────
+    # Runtime command and event propagation
+    # ────────────────────────────────
+
+    def send_command(self, command: IcoRuntimeCommand) -> None:
         """Handle sending of runtime commands."""
         payload = RuntimeCommandPayload(command)
         self._send(payload)
 
-    def _send_event(self, event: IcoRuntimeEvent) -> None:
+    def send_event(self, event: IcoRuntimeEvent) -> None:
         """Handle sending of runtime events."""
         payload = RuntimeEventPayload(event)
         self._send(payload)
@@ -100,6 +88,7 @@ class MPQueueSendEndpoint(
     # ────────────────────────────────
     # Core send logic
     # ────────────────────────────────
+
     def _send(self, payload: ChannelMessagePayload, timeout: int = 5) -> None:
         """Send a payload and wait for acknowledgment."""
         message = payload.wrap()
@@ -160,3 +149,13 @@ class MPQueueSendEndpoint(
         event = payload.event
         event.raise_if_fault()
         raise RuntimeError(f"Unexpected runtime event during ACK wait: {event.type}")
+
+    # ────────────────────────────────
+    # Utilities
+    # ────────────────────────────────
+
+    def close(self) -> None:
+        self._main_queue.close()
+        self._main_queue.join_thread()
+        self._ack_queue.close()
+        self._ack_queue.join_thread()

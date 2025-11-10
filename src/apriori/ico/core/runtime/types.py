@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from enum import Enum, auto
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from typing_extensions import Self
 
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
-from apriori.ico.core.types import I, IcoOperatorProtocol, O
+from apriori.ico.core.runtime.progress.types import ProgressProtocol
+from apriori.ico.core.types import IcoOperatorProtocol
 
 # ──── Runtime Commands ────
 
@@ -65,7 +69,7 @@ class IcoRuntimeEventType(Enum):
 
 
 @runtime_checkable
-class IcoRuntimeProtocol(Protocol):
+class IcoRuntimeProtocol(Protocol, IcoOperatorProtocol[None, None]):
     """
     Protocol for runtime-controllable ICO operators.
 
@@ -94,77 +98,68 @@ class IcoRuntimeProtocol(Protocol):
     def last_event(self) -> IcoRuntimeEvent | None:
         """Last received runtime event."""
 
+    # ─── Runtime Discovery and Connection ───
+
+    def discover_runtime(
+        self, closure: IcoOperatorProtocol[None, None]
+    ) -> Iterator[IcoRuntimeProtocol]: ...
+
+    def connect_runtime(self, runtime: IcoRuntimeProtocol) -> None: ...
+
+    def disconnect_runtime(self, runtime: IcoRuntimeProtocol) -> None: ...
+
+    # ─── Command & Event Propagation ───
+
+    def broadcast_command(self, command: IcoRuntimeCommand) -> None: ...
+
+    def bubble_event(self, event: IcoRuntimeEvent) -> None: ...
+
     # ─── Handlers ───
 
     def on_command(self, command: IcoRuntimeCommand) -> None: ...
 
     def on_event(self, event: IcoRuntimeEvent) -> None: ...
 
-    # ─── Runtime Endpoint Attachment ───
+    # ─── Execution ───
 
-    def connect_runtime(self, endpoint: IcoOperatorProtocol[Any, Any]) -> None: ...
+    def run(self) -> Self:
+        """Execute the contour by calling itself."""
+        ...
+
+    # ─── Lifecycle ───
+
+    def activate(self) -> Self:
+        """Broadcast 'activate' event through the entire flow."""
+        ...
+
+    def reset(self) -> Self:
+        """Broadcast 'reset' event through the entire flow."""
+        ...
+
+    def deactivate(self) -> Self:
+        """Broadcast 'deactivate' event through the entire flow."""
+        ...
+
+    def pause(self) -> Self:
+        """Broadcast 'pause' event through the entire flow."""
+        ...
+
+    def resume(self) -> Self:
+        """Broadcast 'resume' event through the entire flow."""
+        ...
+
+    def stop(self) -> Self:
+        """Broadcast 'stop' event through the entire flow."""
+        ...
+
+    # ─── Progress ───
+
+    def attach_progress(self, progress: ProgressProtocol) -> Self: ...
 
 
-# ──── Support
-class SupportsDownstream(IcoRuntimeProtocol):
-    def broadcast_command(self, command: IcoRuntimeCommand) -> None: ...
-
-
-class SupportsUpstream(IcoRuntimeProtocol):
-    def bubble_event(self, event: IcoRuntimeEvent) -> None: ...
-
-
-class IcoRuntimeOperatorProtocol(
-    IcoOperatorProtocol[I, O],
-    Protocol[I, O],
-    IcoRuntimeProtocol,
-):
-    """Operator that also supports runtime commands."""
-
-    ...
-
-    # # ─── Command Propagation ───
-
-    # def broadcast_command(self, command: IcoRuntimeCommand) -> None:
-    #     """
-    #     Broadcast a runtime command to all child operators.
-
-    #     This propagates the command downward through the operator tree,
-    #     allowing all children to react accordingly.
-    #     """
-    #     ...
-
-    # def bubble_command(self, command: IcoRuntimeCommand) -> None:
-    #     """
-    #     Bubble a runtime command up to the nearest runtime host.
-
-    #     This sends the command upward through the operator tree,
-    #     allowing parent operators to handle it.
-    #     """
-    #     ...
-
-    # # ─── Event Propagation ───
-
-    # def broadcast_event(self, event: IcoRuntimeEvent) -> None:
-    #     """
-    #     Broadcast a runtime event to all child operators.
-
-    #     This propagates the event downward through the operator tree,
-    #     allowing all children to react accordingly.
-    #     """
-    #     ...
-
-    # def bubble_event(self, event: IcoRuntimeEvent) -> None:
-    #     """
-    #     Bubble a runtime event up to the nearest runtime host.
-
-    #     This sends the event upward through the operator tree,
-    #     allowing parent operators to handle it.
-    #     """
-    #     ...
-
-    # ─── Runtime Endpoint Attachment ───
-
-    # def attach_runtime(self, contour: IcoOperatorProtocol[None, None]) -> None:
-    #     """Attach coontour to enable command propagation."""
-    #     ...
+@runtime_checkable
+class IcoRuntimeHost(Protocol):
+    @property
+    def runtime(self) -> IcoRuntimeProtocol:
+        """Get the associated runtime protocol."""
+        ...

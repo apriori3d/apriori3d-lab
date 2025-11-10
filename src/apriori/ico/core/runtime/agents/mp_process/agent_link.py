@@ -3,81 +3,70 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
-from typing import Generic
+from typing import Generic, final
 
+from apriori.ico.core.runtime.agent_link import IcoAgentLinkMixin, IcoAgentLinkProtocol
 from apriori.ico.core.runtime.agents.mp_process.agent import MPProcessAgent
 from apriori.ico.core.runtime.channel import IcoChannelProtocol
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
-from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
-from apriori.ico.core.runtime.types import (
-    IcoRuntimeCommand,
-    IcoRuntimeOperatorProtocol,
-)
+from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
+@final
 class MPProcessAgentLink(
     Generic[I, O],
-    IcoRuntimeOperator[Iterator[I], Iterator[O]],
+    IcoAgentLinkMixin[I, O],
+    IcoAgentLinkProtocol[I, O],
     ProgressMixin,
-    IcoRuntimeOperatorProtocol[Iterator[I], Iterator[O]],
 ):
     # Channels composing this link
+    input_channel: IcoChannelProtocol[I]
+    output_channel: IcoChannelProtocol[O]
+
     _mp_context: SpawnContext
     _flow_factory: Callable[[], IcoOperatorProtocol[I, O]]
-    _input_channel: IcoChannelProtocol[I]
-    _output_channel: IcoChannelProtocol[O]
     _agent_process: SpawnProcess | None
+    _flow_link: IcoOperatorProtocol[Iterator[None], Iterator[None]]
 
     def __init__(
         self,
-        mp_context: SpawnContext,
-        flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         input_channel: IcoChannelProtocol[I],
         output_channel: IcoChannelProtocol[O],
+        mp_context: SpawnContext,
+        flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
     ) -> None:
         super().__init__(
-            fn=self._link_fn,
-            name=name,
+            input_channel=input_channel,
+            output_channel=output_channel,
         )
+        self.name = name or f"MPProcessAgentLink-{id(self)}"
         self._mp_context = mp_context
         self._flow_factory = flow_factory
-        self._input_channel = input_channel
-        self._output_channel = output_channel
         self._agent_process = None
-
-        # Attach two enpoints for command propagation.
-        # Input channel will broadcast commands downstream to the agent and further to the contour.
-        # Output channel.receive will handle upsteam commands (e.g. deactivate to close queues).
-        self.connect_runtime(input_channel.send)
-        self.connect_runtime(output_channel.receive)
-
-    def _link_fn(self, items: Iterator[I]) -> Iterator[O]:
-        for item in items:
-            self._input_channel.send(item)
-            yield self._output_channel.receive(None)
 
     def on_command(self, command: IcoRuntimeCommand) -> None:
         super().on_command(command)
 
         match command:
             case IcoRuntimeCommand.activate:
-                self._agent_process = self._spawn_agent()
+                self._spawn_agent()
 
             case IcoRuntimeCommand.deactivate:
                 self._shutdown_agent()
 
     # ─── Agent process management ───
 
-    def _spawn_agent(self) -> SpawnProcess:
-        return MPProcessAgent.spawn(
+    def _spawn_agent(self) -> None:
+        self._agent_process = MPProcessAgent.spawn(
             mp_context=self._mp_context,
-            input_channel=self._input_channel,
-            output_channel=self._output_channel,
+            input_channel=self.input_channel,
+            output_channel=self.output_channel,
             flow_factory=self._flow_factory,
         )
+        self.input_channel.send.send_command(IcoRuntimeCommand.activate)
 
     def _shutdown_agent(self) -> None:
         if self._agent_process is None:
@@ -86,7 +75,7 @@ class MPProcessAgentLink(
             # Gracefully join the worker process
             if self._agent_process.is_alive():
                 # Notify agent to shutdown befor closing agent process and channels queues
-                self._input_channel.send.broadcast_command(IcoRuntimeCommand.deactivate)
+                self.input_channel.send.send_command(IcoRuntimeCommand.deactivate)
 
                 # Wait for agent process to exit
                 self._agent_process.join(timeout=5)

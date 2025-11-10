@@ -28,8 +28,9 @@ class NodeType(Enum):
     process = auto()
     source = auto()
     sink = auto()
+    runtime = auto()
+    agent_link = auto()
     agent = auto()
-    agent_host = auto()
 
 
 # ─── Operator Protocol ───

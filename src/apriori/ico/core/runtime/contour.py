@@ -6,13 +6,14 @@ from apriori.ico.core.dsl.operator import iterate_nodes
 from apriori.ico.core.meta.ico_form import infer_ico_form
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.progress.types import ProgressProtocol, SupportsProgress
-from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
+from apriori.ico.core.runtime.types import IcoRuntimeProtocol
 from apriori.ico.core.types import IcoOperatorProtocol
 
 
 class IcoRuntimeContour(
-    IcoRuntimeOperator[None, None],
+    IcoRuntimeMixin,
+    IcoRuntimeProtocol,
     ProgressMixin,
 ):
     """
@@ -59,63 +60,23 @@ class IcoRuntimeContour(
         # Contour executes the given closure e.g. flow () → ()
         self._validate_closure(closure)
 
-        super().__init__(fn=self._run_fn, name=name)
+        super().__init__()
 
-        self.connect_runtime(closure)
+        self.name = name or "ico_runtime_contour"
         self._closure = closure
+        self.discover_and_connect_runtimes(closure)
 
     # ─── Execution ───
 
-    def _run_fn(self, _: None) -> None:
-        self._closure(None)
-
     def run(self) -> Self:
         """Execute the contour by calling itself."""
-        self()
-        return self
-
-    # ─── Lifecycle ───
-
-    def activate(self) -> Self:
-        """Broadcast 'activate' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.activate)
-        return self
-
-    def reset(self) -> Self:
-        """Broadcast 'reset' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.reset)
-        return self
-
-    def deactivate(self) -> Self:
-        """Broadcast 'deactivate' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.deactivate)
-        return self
-
-    def pause(self) -> Self:
-        """Broadcast 'pause' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.pause)
-        return self
-
-    def resume(self) -> Self:
-        """Broadcast 'resume' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.resume)
-        return self
-
-    def stop(self) -> Self:
-        """Broadcast 'stop' event through the entire flow."""
-        self.broadcast_command(IcoRuntimeCommand.stop)
+        self._track(self._closure)
         return self
 
     # ─── Progress ───
 
     def attach_progress(self, progress: ProgressProtocol) -> Self:
-        """
-        Bind a shared progress relay to all progress-capable nodes.
-
-        Returns:
-            Self — allows chaining: contour.bind_progress().ready().run().idle()
-        """
-        self.progress = progress
+        super().attach_progress(progress)
 
         for node in iterate_nodes(self._closure):
             if isinstance(node, SupportsProgress):
