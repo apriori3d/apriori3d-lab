@@ -68,25 +68,7 @@ class IcoRuntimeEventType(Enum):
 # ──── Protocol for runtime operators ────
 
 
-@runtime_checkable
-class IcoRuntimeProtocol(Protocol, IcoOperatorProtocol[None, None]):
-    """
-    Protocol for runtime-controllable ICO operators.
-
-    Defines the minimal interface for operators that can
-    participate in the runtime control flow — receiving and
-    propagating execution commands such as activation,
-    reset, or stop.
-
-    Attributes:
-        state: Current runtime state of the operator.
-        last_command: The most recently received runtime command.
-
-    Methods:
-        on_command(command) -> None:
-            Handle an incoming runtime command.
-    """
-
+class IcoRuntimeStateProtocol(Protocol):
     # ─── Properties ───
 
     @property
@@ -97,6 +79,17 @@ class IcoRuntimeProtocol(Protocol, IcoOperatorProtocol[None, None]):
     @property
     def last_event(self) -> IcoRuntimeEvent | None:
         """Last received runtime event."""
+
+    # ─── Handlers ───
+
+    def on_command(self, command: IcoRuntimeCommand) -> None: ...
+
+    def on_event(self, event: IcoRuntimeEvent) -> None: ...
+
+
+class IcoRuntimeHierarchyProtocol(Protocol):
+    runtime_children: list[IcoRuntimeProtocol]
+    runtime_parent: IcoRuntimeProtocol | None
 
     # ─── Runtime Discovery and Connection ───
 
@@ -114,19 +107,15 @@ class IcoRuntimeProtocol(Protocol, IcoOperatorProtocol[None, None]):
 
     def bubble_event(self, event: IcoRuntimeEvent) -> None: ...
 
-    # ─── Handlers ───
+    # ─── Progress ───
 
-    def on_command(self, command: IcoRuntimeCommand) -> None: ...
+    def attach_progress(self, progress: ProgressProtocol) -> Self: ...
 
-    def on_event(self, event: IcoRuntimeEvent) -> None: ...
 
-    # ─── Execution ───
-
+class IcoRuntimeLifecycleProtocol(Protocol):
     def run(self) -> Self:
         """Execute the contour by calling itself."""
         ...
-
-    # ─── Lifecycle ───
 
     def activate(self) -> Self:
         """Broadcast 'activate' event through the entire flow."""
@@ -152,9 +141,15 @@ class IcoRuntimeProtocol(Protocol, IcoOperatorProtocol[None, None]):
         """Broadcast 'stop' event through the entire flow."""
         ...
 
-    # ─── Progress ───
 
-    def attach_progress(self, progress: ProgressProtocol) -> Self: ...
+@runtime_checkable
+class IcoRuntimeProtocol(
+    IcoRuntimeStateProtocol,
+    IcoRuntimeHierarchyProtocol,
+    IcoRuntimeLifecycleProtocol,
+    IcoOperatorProtocol[None, None],
+    Protocol,
+): ...
 
 
 @runtime_checkable

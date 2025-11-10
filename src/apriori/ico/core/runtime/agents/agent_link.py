@@ -4,14 +4,14 @@ from typing import Generic
 
 from apriori.ico.core.runtime.agents.types import IcoAgentLinkProtocol
 from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
-from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
+from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I, O
 
 
 class IcoAgentLinkMixin(
     Generic[I, O],
-    IcoRuntimeMixin,
+    IcoRuntimeOperator,
     IcoAgentLinkProtocol[I, O],
 ):
     input_channel: IcoChannelProtocol[I]

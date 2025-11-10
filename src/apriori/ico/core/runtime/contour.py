@@ -6,13 +6,13 @@ from apriori.ico.core.dsl.operator import iterate_nodes
 from apriori.ico.core.meta.ico_form import infer_ico_form
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.progress.types import ProgressProtocol, SupportsProgress
-from apriori.ico.core.runtime.runtime_mixin import IcoRuntimeMixin
+from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeProtocol
 from apriori.ico.core.types import IcoOperatorProtocol
 
 
 class IcoRuntimeContour(
-    IcoRuntimeMixin,
+    IcoRuntimeOperator,
     IcoRuntimeProtocol,
     ProgressMixin,
 ):

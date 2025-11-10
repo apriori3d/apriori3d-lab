@@ -71,8 +71,6 @@ class IcoOperator(
         node_type: NodeType = NodeType.operator,
         children: list[IcoOperatorProtocol[Any, Any]] | None = None,
     ):
-        # IcoLifecycleMixin.__init__(self)
-        # IcoExecutionMixin.__init__(self)
         super().__init__()
         self.fn = fn
         self.name = name or self.__class__.__name__
