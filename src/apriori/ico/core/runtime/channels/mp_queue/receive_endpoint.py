@@ -51,10 +51,15 @@ class MPQueueReceiveEndpoint(
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
 
-    def __init__(self, main_queue: ChannelQueue, ack_queue: ChannelQueue) -> None:
+    def __init__(
+        self,
+        main_queue: ChannelQueue,
+        ack_queue: ChannelQueue,
+        name: str | None = None,
+    ) -> None:
         super().__init__(
             fn=self._receive_fn,
-            name="mp_queue_receive",
+            name=name or "mp_queue_receive_endpoint",
         )
         self.command_port = None
         self.event_port = None

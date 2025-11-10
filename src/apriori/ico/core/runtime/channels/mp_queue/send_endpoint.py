@@ -50,10 +50,15 @@ class MPQueueSendEndpoint(
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
 
-    def __init__(self, main_queue: ChannelQueue, ack_queue: ChannelQueue) -> None:
+    def __init__(
+        self,
+        main_queue: ChannelQueue,
+        ack_queue: ChannelQueue,
+        name: str | None = None,
+    ) -> None:
         super().__init__(
             fn=self._send_fn,
-            name="mp_queue_send",
+            name=name or "mp_queue_send_endpoint",
             node_type=NodeType.operator,
         )
         self._main_queue = main_queue

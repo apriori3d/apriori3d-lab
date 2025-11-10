@@ -1,51 +1,45 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import Generic, final
 
-from apriori.ico.core.runtime.agents.agent_link import IcoAgentLinkMixin
 from apriori.ico.core.runtime.agents.mp_process.agent import MPProcessAgent
-from apriori.ico.core.runtime.agents.types import IcoAgentLinkProtocol
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
-from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
+from apriori.ico.core.runtime.channels.types import IcoRuntimeChannelRole
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
+from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeCommand
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
 @final
-class MPProcessAgentLink(
+class MPProcessAgentHost(
     Generic[I, O],
-    IcoAgentLinkMixin[I, O],
-    IcoAgentLinkProtocol[I, O],
+    IcoRuntimeOperator,
     ProgressMixin,
 ):
-    # Channels composing this link
-    input_channel: IcoChannelProtocol[I]
-    output_channel: IcoChannelProtocol[O]
-
-    _mp_context: SpawnContext
-    _flow_factory: Callable[[], IcoOperatorProtocol[I, O]]
+    input_channel: MPQueueChannel[I]
+    output_channel: MPQueueChannel[O]
+    mp_context: SpawnContext
+    flow_factory: Callable[[], IcoOperatorProtocol[I, O]]
     _agent_process: SpawnProcess | None
-    _flow_link: IcoOperatorProtocol[Iterator[None], Iterator[None]]
 
     def __init__(
         self,
-        input_channel: IcoChannelProtocol[I],
-        output_channel: IcoChannelProtocol[O],
+        input_channel: MPQueueChannel[I],
+        output_channel: MPQueueChannel[O],
         mp_context: SpawnContext,
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
     ) -> None:
-        super().__init__(
-            input_channel=input_channel,
-            output_channel=output_channel,
-        )
-        self.name = name or f"MPProcessAgentLink-{id(self)}"
-        self._mp_context = mp_context
-        self._flow_factory = flow_factory
+        super().__init__()
+        self.name = name or f"mp_process_agent_host_{id(self)}"
+        self.input_channel = input_channel
+        self.output_channel = output_channel
+        self.mp_context = mp_context
+        self.flow_factory = flow_factory
         self._agent_process = None
 
     def on_command(self, command: IcoRuntimeCommand) -> None:
@@ -62,12 +56,11 @@ class MPProcessAgentLink(
 
     def _spawn_agent(self) -> None:
         self._agent_process = MPProcessAgent.spawn(
-            mp_context=self._mp_context,
+            mp_context=self.mp_context,
             input_channel=self.input_channel,
             output_channel=self.output_channel,
-            flow_factory=self._flow_factory,
+            flow_factory=self.flow_factory,
         )
-        self.input_channel.send.send_command(IcoRuntimeCommand.activate)
 
     def _shutdown_agent(self) -> None:
         if self._agent_process is None:
@@ -105,26 +98,31 @@ class MPProcessAgentLink(
     # ─── Factory helper ───
 
     @classmethod
-    def create_with_context(
+    def create(
         cls,
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
-        *,
-        context: SpawnContext | None = None,
         name: str | None = None,
-    ) -> MPProcessAgentLink[I, O]:
-        """
-        Factory for creating a process link with a shared context.
+    ) -> MPProcessAgentHost[I, O]:
+        mp_context = get_context("spawn")
+        host_name = name or f"mp_process_agent_host_{id(cls)}"
 
-        Ensures both channels share the same multiprocessing context,
-        allowing synchronized data exchange between host and agent.
-        """
-        ctx = context or get_context("spawn")
-        input_channel = MPQueueChannel[I](mp_context=ctx)
-        output_channel = MPQueueChannel[O](mp_context=ctx)
-        return cls(
-            mp_context=ctx,
+        input_channel = MPQueueChannel[I](
+            IcoRuntimeChannelRole.input,
+            mp_context,
+            name=f"{host_name}_input_channel",
+        )
+        output_channel = MPQueueChannel[O](
+            IcoRuntimeChannelRole.output,
+            mp_context,
+            name=f"{host_name}_output_channel",
+        )
+
+        host = MPProcessAgentHost(
+            mp_context=mp_context,
             flow_factory=flow_factory,
             input_channel=input_channel,
             output_channel=output_channel,
             name=name,
         )
+        input_channel.connect_runtime(host)
+        return host

@@ -8,7 +8,8 @@ from typing_extensions import Self
 
 from apriori.ico.core.runtime.agents.agent import IcoAgent
 from apriori.ico.core.runtime.agents.types import IcoAgentProtocol
-from apriori.ico.core.runtime.channels.types import IcoChannelProtocol
+from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.core.runtime.channels.types import IcoRuntimeChannelProtocol
 from apriori.ico.core.runtime.contour import IcoRuntimeContour
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.exceptions import IcoStopExecutionSignal
@@ -29,8 +30,8 @@ class MPProcessAgent(
     def __init__(
         self,
         *,
-        input_channel: IcoChannelProtocol[I],
-        output_channel: IcoChannelProtocol[O],
+        input_channel: IcoRuntimeChannelProtocol[I],
+        output_channel: IcoRuntimeChannelProtocol[O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
     ) -> None:
@@ -85,8 +86,8 @@ class MPProcessAgent(
     def spawn(
         *,
         mp_context: SpawnContext,
-        input_channel: IcoChannelProtocol[I],
-        output_channel: IcoChannelProtocol[O],
+        input_channel: MPQueueChannel[I],
+        output_channel: MPQueueChannel[O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
         relay_progress: bool = True,
@@ -101,8 +102,8 @@ class MPProcessAgent(
 
     @staticmethod
     def _process_fn(
-        input_channel: IcoChannelProtocol[I],
-        output_channel: IcoChannelProtocol[O],
+        input_channel: IcoRuntimeChannelProtocol[I],
+        output_channel: IcoRuntimeChannelProtocol[O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
         relay_progress: bool = True,
