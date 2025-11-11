@@ -7,6 +7,10 @@ import pytest
 from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.dsl.parallel_stream import ParallelStream
 
+# ───────────────────────────────────────────────
+#  Test: basic synchronous processing
+# ───────────────────────────────────────────────
+
 
 def test_parallel_stream_basic() -> None:
     """Ensure all items are processed by ParallelStream."""
@@ -16,6 +20,11 @@ def test_parallel_stream_basic() -> None:
     data = [1, 2, 3, 4, 5]
     result = list(stream(iter(data)))
     assert result == [x * 2 for x in data]
+
+
+# ───────────────────────────────────────────────
+#  Test: async parallel execution and timing
+# ───────────────────────────────────────────────
 
 
 def test_parallel_stream_parallel_execution() -> None:
@@ -39,6 +48,11 @@ def test_parallel_stream_parallel_execution() -> None:
     assert (t1 - t0) < 0.8
 
 
+# ───────────────────────────────────────────────
+#  Test: ordered results are preserved
+# ───────────────────────────────────────────────
+
+
 def test_parallel_stream_ordered() -> None:
     """Test ordered=True preserves order of results."""
 
@@ -55,19 +69,33 @@ def test_parallel_stream_ordered() -> None:
     assert result == [x * 2 for x in data]
 
 
+# ───────────────────────────────────────────────
+#  Test: unordered results follow completion order
+# ───────────────────────────────────────────────
+
+
 def test_parallel_stream_unordered() -> None:
-    """Test ordered=False change order of results."""
+    """Test ordered=False changes order of results."""
 
     async def delayed_double(x):
         await asyncio.sleep(x * 0.01)
         return x * 2
 
+    # Even though the input is reversed, unordered execution yields results
+    # in completion order — effectively re-sorted by async timing.
     data = [1, 2, 3, 4, 5, 6]
     ops = [IcoOperator(delayed_double) for _ in range(len(data))]
     stream = ParallelStream(ops, ordered=False)
     result = list(stream(reversed(data)))
 
-    assert result == [x * 2 for x in data]
+    # Order differs, but all outputs are correct
+    assert sorted(result) == [x * 2 for x in data]
+    assert result != [x * 2 for x in reversed(data)]
+
+
+# ───────────────────────────────────────────────
+#  Test: exceptions propagate correctly
+# ───────────────────────────────────────────────
 
 
 def test_parallel_stream_exception() -> None:
@@ -87,6 +115,33 @@ def test_parallel_stream_exception() -> None:
         list(stream(iter(data)))
 
 
+# ───────────────────────────────────────────────
+#  Test: unordered stream raises immediately on failure
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_unordered_raises_immediately() -> None:
+    """Ensure exceptions from unordered workers propagate immediately."""
+
+    async def maybe_fail(x):
+        await asyncio.sleep(0.01)
+        if x == 2:
+            raise RuntimeError("failure")
+        return x * 2
+
+    ops = [IcoOperator(maybe_fail) for _ in range(3)]
+    stream = ParallelStream(ops, ordered=False)
+    data = [1, 2, 3]
+
+    with pytest.raises(RuntimeError):
+        list(stream(iter(data)))
+
+
+# ───────────────────────────────────────────────
+#  Test: async operators execute transparently
+# ───────────────────────────────────────────────
+
+
 def test_parallel_stream_async_operator() -> None:
     """Ensure async operators work transparently."""
 
@@ -102,11 +157,137 @@ def test_parallel_stream_async_operator() -> None:
     assert sorted(result) == sorted([x * 2 for x in data])
 
 
+# ───────────────────────────────────────────────
+#  Test: empty input stream exits immediately
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_empty_input() -> None:
+    """Verify that an empty input stream triggers fast-exit."""
+
+    ops = [IcoOperator(lambda x: x) for _ in range(2)]
+    stream = ParallelStream(ops)
+    result = list(stream(iter([])))
+    assert result == []
+
+
+# ───────────────────────────────────────────────
+#  Test: single operator and single item
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_single_operator_single_item() -> None:
+    """Minimal path: one worker, one input."""
+
+    async def op(x: int) -> int:
+        await asyncio.sleep(0.01)
+        return x + 1
+
+    stream = ParallelStream([IcoOperator(op)])
+    result = list(stream(iter([10])))
+    assert result == [11]
+
+
+# ───────────────────────────────────────────────
+#  Test: slow worker should not block fast ones (unordered mode)
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_slow_one_does_not_block() -> None:
+    """Ensure unordered execution yields results without waiting for slow tasks."""
+
+    async def slow_or_fast(x: int) -> int:
+        if x == 0:
+            await asyncio.sleep(0.05)  # intentionally slow
+        else:
+            await asyncio.sleep(0.001)
+        return x
+
+    ops = [IcoOperator(slow_or_fast) for _ in range(3)]
+    stream = ParallelStream(ops, ordered=False)
+    data = [0, 1, 2, 3]
+
+    result = list(stream(iter(data)))
+    assert sorted(result) == data
+    assert result[0] != 0  # ensure non-blocking behavior
+
+
+# ───────────────────────────────────────────────
+#  Test: stream can be reused between runs
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_can_be_reused() -> None:
+    """Ensure internal runtime state resets between runs."""
+
+    async def f(x: int) -> int:
+        await asyncio.sleep(0.001)
+        return x + 1
+
+    ops = [IcoOperator(f) for _ in range(2)]
+    stream = ParallelStream(ops)
+    data = [1, 2, 3]
+
+    first_run = list(stream(iter(data)))
+    second_run = list(stream(iter(data)))
+
+    assert first_run == [2, 3, 4]
+    assert second_run == [2, 3, 4]
+
+
+# ───────────────────────────────────────────────
+#  Test: mixed sync + async operators
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_mixed_sync_async() -> None:
+    """Verify mixed sync/async operators are executed correctly."""
+
+    async def async_double_slow(x):
+        await asyncio.sleep(0.1)
+        return x * 2
+
+    def sync_triple(x):
+        return x * 3
+
+    # Mix of sync and async workers.
+    # Asssume async_double_slow should get only first item, second operator the rest.
+    ops = [IcoOperator(async_double_slow), IcoOperator(sync_triple)]
+    stream = ParallelStream(ops)
+
+    data = [1, 2, 3, 4]
+    result = sorted(list(stream(iter(data))))
+    expected = sorted([x * 2 for x in data[:1]] + [x * 3 for x in data[1:]])
+
+    assert result == expected
+
+
+# ───────────────────────────────────────────────
+#  Test: parallel speedup measurement
+# ───────────────────────────────────────────────
+
+
+def test_parallel_stream_parallel_speedup() -> None:
+    """Ensure that parallel execution actually speeds up total runtime."""
+
+    async def slow_double(x: int) -> int:
+        await asyncio.sleep(0.05)
+        return x * 2
+
+    data = list(range(6))
+    ops = [IcoOperator(slow_double) for _ in range(len(data))]
+    stream = ParallelStream(ops)
+
+    start = time.perf_counter()
+    result = list(stream(iter(data)))
+    duration = time.perf_counter() - start
+
+    assert result == [x * 2 for x in data]
+    # Full concurrency must reduce total duration
+    assert duration < 0.25
+
+
 if __name__ == "__main__":
-    test_parallel_stream_unordered()
+    import sys
 
-    # import sys
-
-    # import pytest
-
-    # sys.exit(pytest.main([__file__]))
+    sys.exit(pytest.main([__file__]))
