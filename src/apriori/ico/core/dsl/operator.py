@@ -12,10 +12,7 @@ O2 = TypeVar("O2")
 
 
 # ─── Operator Class ───
-class IcoOperator(
-    IcoOperatorProtocol[I, O],
-    Generic[I, O],
-):
+class IcoOperator(Generic[I, O]):
     """
     An atomic transformation unit following the ICO convention.
 
@@ -55,7 +52,7 @@ class IcoOperator(
         to_float | scale | to_string
     """
 
-    __slots__ = ("fn", "name", "node_type", "children")
+    __slots__ = ("fn", "name", "node_type", "children", "parent")
 
     fn: Callable[[I], O]
     name: str
