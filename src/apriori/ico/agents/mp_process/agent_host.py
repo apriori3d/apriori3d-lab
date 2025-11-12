@@ -5,7 +5,6 @@ from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import final
 
-from apriori.ico.core.runtime.agents.mp_process.agent import MPProcessAgent
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
@@ -50,7 +49,7 @@ class MPProcessAgentHost(
     # ─── Agent process management ───
 
     def _spawn_agent(self) -> None:
-        self._agent_process = MPProcessAgent.spawn(
+        self._agent_process = MPProcessAgentHost.spawn(
             mp_context=self.mp_context,
             channel=self.channel,
             flow_factory=self.flow_factory,
