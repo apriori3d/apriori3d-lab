@@ -5,7 +5,7 @@ from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import final
 
-from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeCommand

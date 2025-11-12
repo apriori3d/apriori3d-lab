@@ -7,9 +7,9 @@ from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
 @final
-class ParallelStream(Generic[I, O], IcoOperator[Iterator[I], Iterator[O]]):
+class AsyncStream(Generic[I, O], IcoOperator[Iterator[I], Iterator[O]]):
     """
-    Parallel asynchronous stream operator.
+    Asynchronous stream operator.
 
     ICO form:
         Iterator[I] → Iterator[O]

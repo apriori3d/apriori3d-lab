@@ -6,7 +6,7 @@ from typing import final
 
 from typing_extensions import Self
 
-from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.channels.types import IcoRuntimeChannelProtocol
 from apriori.ico.core.runtime.contour import IcoRuntimeContour
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
