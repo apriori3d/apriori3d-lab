@@ -8,9 +8,9 @@ from typing_extensions import Self
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.types import ProgressProtocol, SupportsProgress
 from apriori.ico.core.runtime.types import (
+    ConnectedToIcoRuntime,
     IcoRuntimeCommand,
     IcoRuntimeHierarchyProtocol,
-    IcoRuntimeHost,
     IcoRuntimeProtocol,
 )
 from apriori.ico.core.types import IcoOperatorProtocol
@@ -71,7 +71,7 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
         self, closure: IcoOperatorProtocol[None, None]
     ) -> Iterator[IcoRuntimeProtocol]:
         """Discover all runtime hosts within the given closure."""
-        if isinstance(closure, IcoRuntimeHost):
+        if isinstance(closure, ConnectedToIcoRuntime):
             raise ValueError(
                 "Cannot discover runtime within a closure that is itself a runtime"
             )
@@ -82,7 +82,7 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
     ) -> Iterator[IcoRuntimeProtocol]:
         """Discover all runtime hosts within the given closure."""
 
-        if isinstance(operator, IcoRuntimeHost):
+        if isinstance(operator, ConnectedToIcoRuntime):
             # If we are already in a runtime scope, do not yield nested hosts
             if in_runtime_scope:
                 return

@@ -13,11 +13,8 @@ from apriori.ico.core.runtime.channels.mp_queue.receive_endpoint import (
     MPQueueReceiveEndpoint,
 )
 from apriori.ico.core.runtime.channels.mp_queue.send_endpoint import MPQueueSendEndpoint
-from apriori.ico.core.runtime.channels.types import (
-    IcoRuntimeChannelRole,
-)
 from apriori.ico.core.runtime.types import IcoRuntimeCommand
-from apriori.ico.core.types import I
+from apriori.ico.core.types import I, O
 
 if TYPE_CHECKING:
     ChannelQueue = Queue[ChannelMessage]
@@ -27,11 +24,11 @@ else:
 
 @final
 class MPQueueChannel(
-    Generic[I],
-    IcoRuntimeChannelMixin[I],
+    Generic[I, O],
+    IcoRuntimeChannelMixin[I, O],
 ):
     send: MPQueueSendEndpoint[I]
-    receive: MPQueueReceiveEndpoint[I]
+    receive: MPQueueReceiveEndpoint[O]
     _mp_context: SpawnContext
 
     _main_queue: ChannelQueue
@@ -39,7 +36,6 @@ class MPQueueChannel(
 
     def __init__(
         self,
-        role: IcoRuntimeChannelRole,
         mp_context: SpawnContext,
         name: str | None = None,
     ) -> None:
@@ -53,14 +49,13 @@ class MPQueueChannel(
             name=f"{name}_send_endpoint" if name else None,
         )
 
-        receive = MPQueueReceiveEndpoint[I](
+        receive = MPQueueReceiveEndpoint[O](
             main_queue=main_queue,
             ack_queue=ack_queue,
             name=f"{name}_receive_endpoint" if name else None,
         )
 
         super().__init__(
-            role=role,
             send=send,
             receive=receive,
             name=name or "mp_queue_channel",

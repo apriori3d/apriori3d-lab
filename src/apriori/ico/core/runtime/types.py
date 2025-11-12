@@ -65,7 +65,7 @@ class IcoRuntimeEventType(Enum):
     heartbeat = auto()
 
 
-# ──── Protocol for runtime operators ────
+# ──── Protocols for runtime operators ────
 
 
 class IcoRuntimeStateProtocol(Protocol):
@@ -80,7 +80,10 @@ class IcoRuntimeStateProtocol(Protocol):
     def last_event(self) -> IcoRuntimeEvent | None:
         """Last received runtime event."""
 
-    # ─── Handlers ───
+
+@runtime_checkable
+class IcoRuntimePortProtocol(Protocol):
+    """Operator responsible for pushing data and runtime events downstream."""
 
     def on_command(self, command: IcoRuntimeCommand) -> None: ...
 
@@ -147,13 +150,14 @@ class IcoRuntimeProtocol(
     IcoRuntimeStateProtocol,
     IcoRuntimeHierarchyProtocol,
     IcoRuntimeLifecycleProtocol,
+    IcoRuntimePortProtocol,
     IcoOperatorProtocol[None, None],
     Protocol,
 ): ...
 
 
 @runtime_checkable
-class IcoRuntimeHost(Protocol):
+class ConnectedToIcoRuntime(Protocol):
     @property
     def runtime(self) -> IcoRuntimeProtocol:
         """Get the associated runtime protocol."""

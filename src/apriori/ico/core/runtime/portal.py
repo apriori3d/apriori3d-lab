@@ -3,7 +3,7 @@ from typing import Generic, final
 
 from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.runtime.agents.types import IcoAgentLinkProtocol
-from apriori.ico.core.runtime.types import IcoRuntimeHost, IcoRuntimeProtocol
+from apriori.ico.core.runtime.types import ConnectedToIcoRuntime, IcoRuntimeProtocol
 from apriori.ico.core.types import I, O
 
 
@@ -11,7 +11,7 @@ from apriori.ico.core.types import I, O
 class IcoPortal(
     Generic[I, O],
     IcoOperator[Iterator[I], Iterator[O]],
-    IcoRuntimeHost,
+    ConnectedToIcoRuntime,
 ):
     _agent_link: IcoAgentLinkProtocol[I, O]
 

@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from multiprocessing.context import SpawnContext, SpawnProcess
-from typing import Generic, final
+from typing import final
 
 from typing_extensions import Self
 
-from apriori.ico.core.runtime.agents.agent import IcoAgent
-from apriori.ico.core.runtime.agents.types import IcoAgentProtocol
 from apriori.ico.core.runtime.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.channels.types import IcoRuntimeChannelProtocol
 from apriori.ico.core.runtime.contour import IcoRuntimeContour
@@ -20,29 +18,20 @@ from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 @final
 class MPProcessAgent(
-    Generic[I, O],
-    IcoAgent[I, O],
-    IcoAgentProtocol[I, O],
+    IcoRuntimeContour,
     ProgressMixin,
 ):
-    _contour: IcoRuntimeContour
-
     def __init__(
         self,
         *,
-        input_channel: IcoRuntimeChannelProtocol[I],
-        output_channel: IcoRuntimeChannelProtocol[O],
+        channel: IcoRuntimeChannelProtocol[I, O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
     ) -> None:
         flow = flow_factory()
-        closure = input_channel.receive | flow | output_channel.send
+        closure = channel.receive | flow | channel.send
 
-        super().__init__(
-            closure=closure,
-            input_channel=input_channel,
-            output_channel=output_channel,
-        )
+        super().__init__(closure=closure)
         self.name = name or f"MPProcessAgent-{id(self)}"
 
     def run_loop(self) -> Self:
@@ -86,15 +75,14 @@ class MPProcessAgent(
     def spawn(
         *,
         mp_context: SpawnContext,
-        input_channel: MPQueueChannel[I],
-        output_channel: MPQueueChannel[O],
+        channel: MPQueueChannel[I, O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
         relay_progress: bool = True,
     ) -> SpawnProcess:
         process = mp_context.Process(
             target=MPProcessAgent._process_fn,
-            args=(input_channel, output_channel, flow_factory, name, relay_progress),
+            args=(channel, flow_factory, name, relay_progress),
         )
         # TODO: relay_progress
         process.start()
@@ -102,15 +90,13 @@ class MPProcessAgent(
 
     @staticmethod
     def _process_fn(
-        input_channel: IcoRuntimeChannelProtocol[I],
-        output_channel: IcoRuntimeChannelProtocol[O],
+        channel: IcoRuntimeChannelProtocol[I, O],
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
         name: str | None = None,
         relay_progress: bool = True,
     ) -> None:
-        agent = MPProcessAgent[I, O](
-            input_channel=input_channel,
-            output_channel=output_channel,
+        agent = MPProcessAgent(
+            channel=channel,
             flow_factory=flow_factory,
             name=name,
         )

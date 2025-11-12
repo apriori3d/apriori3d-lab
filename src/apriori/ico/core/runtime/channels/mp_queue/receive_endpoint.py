@@ -19,8 +19,8 @@ from apriori.ico.core.runtime.channels.types import IcoReceiveEndpointProtocol
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.exceptions import IcoRuntimeError, IcoStopExecutionSignal
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
-from apriori.ico.core.types import I
+from apriori.ico.core.runtime.types import IcoRuntimeCommand, IcoRuntimePortProtocol
+from apriori.ico.core.types import I, O
 
 if TYPE_CHECKING:
     ChannelQueue = Queue[ChannelMessage]
@@ -30,9 +30,9 @@ else:
 
 @final
 class MPQueueReceiveEndpoint(
-    Generic[I],
-    IcoOperator[None, I],
-    IcoReceiveEndpointProtocol[I],
+    Generic[O],
+    IcoOperator[None, O],
+    IcoReceiveEndpointProtocol[O],
     ProgressMixin,
 ):
     """
@@ -45,14 +45,14 @@ class MPQueueReceiveEndpoint(
       • Acknowledge receipt to the sender
     """
 
-    command_port: Callable[[IcoRuntimeCommand], None] | None
-    event_port: Callable[[IcoRuntimeEvent], None] | None
+    runtime_port: IcoRuntimePortProtocol
 
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
 
     def __init__(
         self,
+        runtime_port: IcoRuntimePortProtocol,
         main_queue: ChannelQueue,
         ack_queue: ChannelQueue,
         name: str | None = None,
@@ -61,8 +61,7 @@ class MPQueueReceiveEndpoint(
             fn=self._receive_fn,
             name=name or "mp_queue_receive_endpoint",
         )
-        self.command_port = None
-        self.event_port = None
+        self.runtime_port = runtime_port
         self._main_queue = main_queue
         self._ack_queue = ack_queue
 
@@ -138,9 +137,8 @@ class MPQueueReceiveEndpoint(
         payload = cast(RuntimeCommandPayload, message.unwrap())
         command = payload.command
 
-        # Propagate downstream before acknowledging
-        if self.command_port is not None:
-            self.command_port(command)
+        # Propagate command to connected runtime
+        self.runtime_port.on_command(command)
 
         self._ack(ChannelMessageType.runtime_command)
 
@@ -157,8 +155,9 @@ class MPQueueReceiveEndpoint(
 
         if event.is_fault:
             event.raise_if_fault()
-        elif self.event_port is not None:
-            self.event_port(event)
+
+        # Propagate event to connected runtime
+        self.runtime_port.on_event(event)
 
     # ────────────────────────────────
     # Utilities
