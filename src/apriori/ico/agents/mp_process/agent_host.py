@@ -8,7 +8,7 @@ from typing import final
 from apriori.ico.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.types import IcoRuntimeCommandType
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
@@ -36,14 +36,14 @@ class MPProcessAgentHost(
         self.flow_factory = flow_factory
         self._agent_process = None
 
-    def on_command(self, command: IcoRuntimeCommand) -> None:
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
         super().on_command(command)
 
         match command:
-            case IcoRuntimeCommand.activate:
+            case IcoRuntimeCommandType.activate:
                 self._spawn_agent()
 
-            case IcoRuntimeCommand.deactivate:
+            case IcoRuntimeCommandType.deactivate:
                 self._shutdown_agent()
 
     # ─── Agent process management ───
@@ -62,7 +62,7 @@ class MPProcessAgentHost(
             # Gracefully join the worker process
             if self._agent_process.is_alive():
                 # Notify agent to shutdown befor closing agent process and channels queues
-                self.channel.send.send_command(IcoRuntimeCommand.deactivate)
+                # self.channel.send.send_command(IcoRuntimeCommandType.deactivate)
 
                 # Wait for agent process to exit
                 self._agent_process.join(timeout=5)

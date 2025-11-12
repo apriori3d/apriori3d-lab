@@ -4,9 +4,9 @@ from __future__ import annotations
 import queue
 from collections.abc import Callable
 from multiprocessing import Queue
-from typing import TYPE_CHECKING, Generic, cast, final
+from typing import TYPE_CHECKING, cast, final
 
-from apriori.ico.core.dsl.operator import IcoOperator
+from apriori.ico.core.runtime.channels.channel import IcoReceiveEndpointMixin
 from apriori.ico.core.runtime.channels.messages import (
     AcknowledgePayload,
     ChannelMessage,
@@ -16,11 +16,10 @@ from apriori.ico.core.runtime.channels.messages import (
     RuntimeCommandPayload,
     RuntimeEventPayload,
 )
-from apriori.ico.core.runtime.channels.types import IcoSendEndpointProtocol
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.types import (
-    IcoRuntimeCommand,
+    IcoRuntimeCommandType,
 )
 from apriori.ico.core.types import I, NodeType
 
@@ -32,9 +31,7 @@ else:
 
 @final
 class MPQueueSendEndpoint(
-    Generic[I],
-    IcoOperator[I, None],
-    IcoSendEndpointProtocol[I],
+    IcoReceiveEndpointMixin[I],
     ProgressMixin,
 ):
     """
@@ -55,6 +52,7 @@ class MPQueueSendEndpoint(
         main_queue: ChannelQueue,
         ack_queue: ChannelQueue,
         name: str | None = None,
+        timeout: float = 5.0,
     ) -> None:
         super().__init__(
             fn=self._send_fn,
@@ -63,6 +61,7 @@ class MPQueueSendEndpoint(
         )
         self._main_queue = main_queue
         self._ack_queue = ack_queue
+        self._timeout = timeout
 
     # ────────────────────────────────
     # Main send function
@@ -80,12 +79,12 @@ class MPQueueSendEndpoint(
     # Runtime command and event propagation
     # ────────────────────────────────
 
-    def send_command(self, command: IcoRuntimeCommand) -> None:
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
         """Handle sending of runtime commands."""
         payload = RuntimeCommandPayload(command)
         self._send(payload)
 
-    def send_event(self, event: IcoRuntimeEvent) -> None:
+    def on_event(self, event: IcoRuntimeEvent) -> None:
         """Handle sending of runtime events."""
         payload = RuntimeEventPayload(event)
         self._send(payload)
@@ -94,11 +93,11 @@ class MPQueueSendEndpoint(
     # Core send logic
     # ────────────────────────────────
 
-    def _send(self, payload: ChannelMessagePayload, timeout: int = 5) -> None:
+    def _send(self, payload: ChannelMessagePayload) -> None:
         """Send a payload and wait for acknowledgment."""
         message = payload.wrap()
         self._main_queue.put(message)
-        self._wait_for_ack(message, timeout)
+        self._wait_for_ack(message, timeout=self._timeout)
 
     def _wait_for_ack(self, pending_message: ChannelMessage, timeout: int = 5) -> None:
         """Wait for acknowledgment or handle runtime events from peer."""

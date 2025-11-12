@@ -113,7 +113,8 @@ class IcoOperator(Generic[I, O]):
         """Function chaining: (I → O, O → O2) == I → O2."""
 
         def chained(x: I) -> O2:
-            return other(self(x))
+            output = self(x)
+            return other(output)
 
         return IcoOperator(
             fn=chained,

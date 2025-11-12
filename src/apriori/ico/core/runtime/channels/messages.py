@@ -6,7 +6,7 @@ from enum import Enum, auto
 from typing import Any, ClassVar
 
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.types import IcoRuntimeCommandType
 
 # ──────────────────────────────────────────────────────────────
 # Message categories
@@ -77,7 +77,7 @@ class InputPayload(ChannelMessagePayload):
 class RuntimeCommandPayload(ChannelMessagePayload):
     """Payload carrying a runtime command (activate/reset/stop)."""
 
-    command: IcoRuntimeCommand
+    command: IcoRuntimeCommandType
 
 
 @message(ChannelMessageType.runtime_event)

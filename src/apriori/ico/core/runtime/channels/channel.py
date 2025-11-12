@@ -9,7 +9,7 @@ from apriori.ico.core.runtime.channels.types import (
 )
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.types import IcoRuntimeCommandType, IcoRuntimeFlowProtocol
 from apriori.ico.core.types import I, O
 
 
@@ -36,7 +36,7 @@ class IcoRuntimeChannelMixin(
         # Connect remote runtime via endpoint runtime port
         self.receive.runtime = self
 
-    def on_command(self, command: IcoRuntimeCommand) -> None:
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
         super().on_command(command)
 
         # Send command to runtime port of send endpoint
@@ -47,3 +47,23 @@ class IcoRuntimeChannelMixin(
 
         # Send event to runtime port of send endpoint
         self.send.on_event(event)
+
+
+class IcoReceiveEndpointMixin(
+    Generic[O],
+    IcoReceiveEndpointProtocol[O],
+):
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
+        if self.runtime:
+            self.runtime.broadcast_command(command)
+
+    def on_event(self, event: IcoRuntimeEvent) -> None:
+        if self.runtime:
+            self.runtime.bubble_event(event)
+
+
+class IcoSendEndpointMixin(
+    Generic[I],
+    IcoSendEndpointProtocol[I],
+    IcoRuntimeFlowProtocol,
+): ...

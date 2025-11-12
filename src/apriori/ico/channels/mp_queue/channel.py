@@ -13,7 +13,7 @@ from apriori.ico.core.runtime.channels.channel import IcoRuntimeChannelMixin
 from apriori.ico.core.runtime.channels.messages import (
     ChannelMessage,
 )
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.types import IcoRuntimeCommandType
 from apriori.ico.core.types import I, O
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class MPQueueChannel(
 ):
     send: MPQueueSendEndpoint[I]
     receive: MPQueueReceiveEndpoint[O]
-    _mp_context: SpawnContext
+    mp_context: SpawnContext
 
     _main_queue: ChannelQueue
     _ack_queue: ChannelQueue
@@ -60,14 +60,14 @@ class MPQueueChannel(
             receive=receive,
             name=name or "mp_queue_channel",
         )
-        self._mp_context = mp_context
+        self.mp_context = mp_context
         self._main_queue = main_queue
         self._ack_queue = ack_queue
 
-    def on_command(self, command: IcoRuntimeCommand) -> None:
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
         super().on_command(command)
 
         # Handle close command
-        if command == IcoRuntimeCommand.deactivate:
+        if command == IcoRuntimeCommandType.deactivate:
             self.send.close()
             self.receive.close()

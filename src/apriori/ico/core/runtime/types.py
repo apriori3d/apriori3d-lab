@@ -2,18 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from enum import Enum, auto
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
-from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.types import ProgressProtocol
 from apriori.ico.core.types import IcoOperatorProtocol
 
 # ──── Runtime Commands ────
 
 
-class IcoRuntimeCommand(Enum):
+class IcoRuntimeCommandType(Enum):
     """
     Runtime commands controlling activation and resource lifecycle
     across agents and runtime contours.
@@ -38,7 +37,7 @@ class IcoRuntimeCommand(Enum):
 # ──── State for runtime operators ────
 
 
-class IcoRuntimeState(Enum):
+class IcoRuntimeStateType(Enum):
     """
     Current runtime state of an agent and connected contour.
 
@@ -65,6 +64,11 @@ class IcoRuntimeEventType(Enum):
     heartbeat = auto()
 
 
+class IcoRuntimeEventProtocol(Protocol):
+    type: IcoRuntimeEventType
+    meta: dict[Any, Any]
+
+
 # ──── Protocols for runtime operators ────
 
 
@@ -72,27 +76,27 @@ class IcoRuntimeStateProtocol(Protocol):
     # ─── Properties ───
 
     @property
-    def state(self) -> IcoRuntimeState:
+    def state(self) -> IcoRuntimeStateType:
         """Current runtime state."""
         ...
 
     @property
-    def last_event(self) -> IcoRuntimeEvent | None:
+    def last_event(self) -> IcoRuntimeEventProtocol | None:
         """Last received runtime event."""
 
 
-@runtime_checkable
-class IcoRuntimePortProtocol(Protocol):
+class IcoRuntimeFlowProtocol(Protocol):
     """Operator responsible for pushing data and runtime events downstream."""
 
-    def on_command(self, command: IcoRuntimeCommand) -> None: ...
+    def on_command(self, command: IcoRuntimeCommandType) -> None: ...
 
-    def on_event(self, event: IcoRuntimeEvent) -> None: ...
+    def on_event(self, event: IcoRuntimeEventProtocol) -> None: ...
 
 
+@runtime_checkable
 class IcoRuntimeHierarchyProtocol(Protocol):
-    runtime_children: list[IcoRuntimeProtocol]
-    runtime_parent: IcoRuntimeProtocol | None
+    runtime_children: list[IcoRuntimeHierarchyProtocol]
+    runtime_parent: IcoRuntimeHierarchyProtocol | None
 
     # ─── Runtime Discovery and Connection ───
 
@@ -100,57 +104,26 @@ class IcoRuntimeHierarchyProtocol(Protocol):
         self, closure: IcoOperatorProtocol[None, None]
     ) -> Iterator[IcoRuntimeProtocol]: ...
 
-    def connect_runtime(self, runtime: IcoRuntimeProtocol) -> None: ...
+    def connect_runtime(self, runtime: IcoRuntimeHierarchyProtocol) -> None: ...
 
-    def disconnect_runtime(self, runtime: IcoRuntimeProtocol) -> None: ...
+    def disconnect_runtime(self, runtime: IcoRuntimeHierarchyProtocol) -> None: ...
 
     # ─── Command & Event Propagation ───
 
-    def broadcast_command(self, command: IcoRuntimeCommand) -> None: ...
+    def broadcast_command(self, command: IcoRuntimeCommandType) -> None: ...
 
-    def bubble_event(self, event: IcoRuntimeEvent) -> None: ...
+    def bubble_event(self, event: IcoRuntimeEventProtocol) -> None: ...
 
     # ─── Progress ───
 
     def attach_progress(self, progress: ProgressProtocol) -> Self: ...
 
 
-class IcoRuntimeLifecycleProtocol(Protocol):
-    def run(self) -> Self:
-        """Execute the contour by calling itself."""
-        ...
-
-    def activate(self) -> Self:
-        """Broadcast 'activate' event through the entire flow."""
-        ...
-
-    def reset(self) -> Self:
-        """Broadcast 'reset' event through the entire flow."""
-        ...
-
-    def deactivate(self) -> Self:
-        """Broadcast 'deactivate' event through the entire flow."""
-        ...
-
-    def pause(self) -> Self:
-        """Broadcast 'pause' event through the entire flow."""
-        ...
-
-    def resume(self) -> Self:
-        """Broadcast 'resume' event through the entire flow."""
-        ...
-
-    def stop(self) -> Self:
-        """Broadcast 'stop' event through the entire flow."""
-        ...
-
-
 @runtime_checkable
 class IcoRuntimeProtocol(
     IcoRuntimeStateProtocol,
     IcoRuntimeHierarchyProtocol,
-    IcoRuntimeLifecycleProtocol,
-    IcoRuntimePortProtocol,
+    IcoRuntimeFlowProtocol,
     IcoOperatorProtocol[None, None],
     Protocol,
 ): ...
@@ -158,7 +131,5 @@ class IcoRuntimeProtocol(
 
 @runtime_checkable
 class ConnectedToIcoRuntime(Protocol):
-    @property
-    def runtime(self) -> IcoRuntimeProtocol:
-        """Get the associated runtime protocol."""
-        ...
+    runtime: IcoRuntimeProtocol | None
+    """Get the associated runtime protocol."""

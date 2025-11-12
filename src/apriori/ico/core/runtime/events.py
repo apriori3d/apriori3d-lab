@@ -14,6 +14,10 @@ class IcoRuntimeEvent:
     meta: dict[Any, Any] = field(default_factory=dict)
 
     @staticmethod
+    def heartbeat() -> IcoRuntimeEvent:
+        return IcoRuntimeEvent(type=IcoRuntimeEventType.heartbeat)
+
+    @staticmethod
     def exception(e: Exception) -> IcoRuntimeEvent:
         # Extract exception metadata
         exc_type = type(e)

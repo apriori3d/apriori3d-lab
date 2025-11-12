@@ -9,7 +9,7 @@ from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.types import ProgressProtocol, SupportsProgress
 from apriori.ico.core.runtime.types import (
     ConnectedToIcoRuntime,
-    IcoRuntimeCommand,
+    IcoRuntimeCommandType,
     IcoRuntimeHierarchyProtocol,
     IcoRuntimeProtocol,
 )
@@ -17,17 +17,11 @@ from apriori.ico.core.types import IcoOperatorProtocol
 
 
 class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
-    runtime_children: list[IcoRuntimeProtocol]
-    runtime_parent: IcoRuntimeProtocol | None
-    __as_runtime: IcoRuntimeProtocol
+    runtime_children: list[IcoRuntimeHierarchyProtocol]
+    runtime_parent: IcoRuntimeHierarchyProtocol | None
 
     def __init__(self) -> None:
         super().__init__()
-        if not isinstance(self, IcoRuntimeProtocol):
-            raise TypeError(
-                "IcoRuntimeLifecycleMixin can only be used with IcoRuntimeProtocol instances"
-            )
-        self.__as_runtime = self
         self.runtime_children = []
         self.runtime_parent = None
 
@@ -35,7 +29,7 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
 
     def broadcast_command(
         self,
-        command: IcoRuntimeCommand,
+        command: IcoRuntimeCommandType,
     ) -> None:
         """
         Recursively propagate a runtime command through the operator tree.
@@ -43,11 +37,10 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
         Each node implementing `SupportsIcoRuntime` receives `on_command(command)`.
         """
         for child in self.runtime_children:
-            if not isinstance(child, IcoRuntimeProtocol):
+            if not isinstance(child, IcoRuntimeHierarchyProtocol):
                 raise TypeError(
                     f"Child operator {child} in runtime should be an instance of IcoRuntimeProtocol"
                 )
-            child.on_command(command)
             child.broadcast_command(command)
 
     # ─── Event propagation ───
@@ -56,14 +49,8 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
         """
         Propagate a runtime event upward until a contour or agent host is reached.
         """
-        node: IcoRuntimeProtocol = self.__as_runtime
-        while node.runtime_parent is not None:
-            if not isinstance(node.runtime_parent, IcoRuntimeProtocol):
-                raise TypeError(
-                    f"Parent operator {node} in runtime should be an instance of IcoRuntimeProtocol"
-                )
-            node = node.runtime_parent
-            node.on_event(event)
+        if self.runtime_parent:
+            self.runtime_parent.bubble_event(event)
 
     # ─── Runtime Discovery and Connection ───
 
@@ -71,10 +58,6 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
         self, closure: IcoOperatorProtocol[None, None]
     ) -> Iterator[IcoRuntimeProtocol]:
         """Discover all runtime hosts within the given closure."""
-        if isinstance(closure, ConnectedToIcoRuntime):
-            raise ValueError(
-                "Cannot discover runtime within a closure that is itself a runtime"
-            )
         yield from self._discover_runtime_deep(closure)
 
     def _discover_runtime_deep(
@@ -95,17 +78,20 @@ class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
 
     def connect_runtime(self, runtime: IcoRuntimeProtocol) -> None:
         """Connect to a runtime host for command propagation."""
-        if runtime not in self.__as_runtime.runtime_children and (
-            runtime.runtime_parent and runtime.runtime_parent != self.__as_runtime
-        ):
-            self.__as_runtime.runtime_children.append(runtime)
-            runtime.runtime_parent = self.__as_runtime
+        if not isinstance(runtime, IcoRuntimeProtocol):
+            raise TypeError(
+                f"Cannot connect to runtime {runtime}: it does not implement IcoRuntimePortProtocol"
+            )
+
+        if runtime not in self.runtime_children:
+            self.runtime_children.append(runtime)
+        runtime.runtime_parent = self
 
     def disconnect_runtime(self, runtime: IcoRuntimeProtocol) -> None:
         """Disconnect from a runtime host."""
         if runtime in self.runtime_children:
             self.runtime_children.remove(runtime)
-            runtime.parent = None
+        runtime.parent = None
 
     def discover_and_connect_runtimes(
         self, closure: IcoOperatorProtocol[None, None]

@@ -3,9 +3,9 @@ from typing import Any
 
 from apriori.ico.core import IcoOperator, IcoPipeline
 from apriori.ico.core.runtime.types import (
-    IcoRuntimeCommand,
+    IcoRuntimeCommandType,
     IcoRuntimeMixin,
-    IcoRuntimeState,
+    IcoRuntimeStateType,
 )
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
@@ -37,9 +37,9 @@ def test_lifecycle_broadcast_updates_nested_states() -> None:
             IcoOperator.__init__(self, lambda x: x, name=name)
             IcoRuntimeMixin.__init__(self)
 
-            self.events: list[IcoRuntimeCommand] = []
+            self.events: list[IcoRuntimeCommandType] = []
 
-        def on_event(self, event: IcoRuntimeCommand) -> None:
+        def on_event(self, event: IcoRuntimeCommandType) -> None:
             super().on_event(event)
             self.events.append(event)
 
@@ -77,22 +77,22 @@ def test_lifecycle_broadcast_updates_nested_states() -> None:
     )
 
     # ── 1. Prepare phase ──────────────────────────────
-    pipeline.broadcast_event(IcoRuntimeCommand.activate)
+    pipeline.broadcast_event(IcoRuntimeCommandType.activate)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoRuntimeState.running
-        assert IcoRuntimeCommand.activate in op.events
+        assert op.state == IcoRuntimeStateType.running
+        assert IcoRuntimeCommandType.activate in op.events
 
     # ── 2. Reset phase ────────────────────────────────
-    pipeline.broadcast_event(IcoRuntimeCommand.reset)
+    pipeline.broadcast_event(IcoRuntimeCommandType.reset)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoRuntimeState.running
-        assert IcoRuntimeCommand.reset in op.events
+        assert op.state == IcoRuntimeStateType.running
+        assert IcoRuntimeCommandType.reset in op.events
 
     # ── 3. Cleanup phase ──────────────────────────────
-    pipeline.broadcast_event(IcoRuntimeCommand.deavtivate)
+    pipeline.broadcast_event(IcoRuntimeCommandType.deavtivate)
     for op in (stateful_a, stateful_b, stateful_child):
-        assert op.state == IcoRuntimeState.cleaned
-        assert IcoRuntimeCommand.deavtivate in op.events
+        assert op.state == IcoRuntimeStateType.cleaned
+        assert IcoRuntimeCommandType.deavtivate in op.events
 
     # Ensure stateless node never changed state (not lifecycle-aware)
     assert not hasattr(stateless, "state")

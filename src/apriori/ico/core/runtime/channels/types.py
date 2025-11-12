@@ -4,16 +4,15 @@ from typing import Protocol
 
 from apriori.ico.core.runtime.types import (
     ConnectedToIcoRuntime,
-    IcoRuntimePortProtocol,
     IcoRuntimeProtocol,
 )
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
 class IcoSendEndpointProtocol(
+    IcoRuntimeProtocol,
     IcoOperatorProtocol[I, None],
     Protocol[I],
-    IcoRuntimePortProtocol,
 ):
     """Operator responsible for pushing data and runtime events downstream."""
 
@@ -21,15 +20,15 @@ class IcoSendEndpointProtocol(
 
 
 class IcoReceiveEndpointProtocol(
+    ConnectedToIcoRuntime,
     IcoOperatorProtocol[None, O],
     Protocol[O],
-    ConnectedToIcoRuntime,
 ):
     """Operator responsible for pulling data and runtime events."""
 
     ...
 
 
-class IcoRuntimeChannelProtocol(Protocol[I, O], IcoRuntimeProtocol):
+class IcoRuntimeChannelProtocol(IcoRuntimeProtocol, Protocol[I, O]):
     send: IcoSendEndpointProtocol[I]
     receive: IcoReceiveEndpointProtocol[O]

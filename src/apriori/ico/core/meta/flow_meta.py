@@ -6,7 +6,7 @@ from typing import Any, final
 
 from apriori.ico.core.meta.ico_form import IcoForm
 from apriori.ico.core.runtime.execution import IcoExecutionState, SupportsIcoExecution
-from apriori.ico.core.runtime.types import IcoRuntimeProtocol, IcoRuntimeState
+from apriori.ico.core.runtime.types import IcoRuntimeProtocol, IcoRuntimeStateType
 from apriori.ico.core.types import IcoOperatorProtocol, NodeType
 
 
@@ -28,7 +28,7 @@ class IcoFlowMeta:
     node_type: NodeType
     ico_form: IcoForm
     name: str
-    state: IcoRuntimeState | None = None
+    state: IcoRuntimeStateType | None = None
     exec_state: IcoExecutionState | None = None
     children: list[IcoFlowMeta] = field(default_factory=list)
 

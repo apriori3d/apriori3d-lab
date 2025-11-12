@@ -12,7 +12,7 @@ from apriori.ico.core.runtime.contour import IcoRuntimeContour
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.exceptions import IcoStopExecutionSignal
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
-from apriori.ico.core.runtime.types import IcoRuntimeCommand
+from apriori.ico.core.runtime.types import IcoRuntimeCommandType
 from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 
@@ -64,10 +64,10 @@ class MPProcessAgent(
 
         return self
 
-    def on_command(self, command: IcoRuntimeCommand) -> None:
+    def on_command(self, command: IcoRuntimeCommandType) -> None:
         super().on_command(command)
 
-        if command == IcoRuntimeCommand.deactivate:
+        if command == IcoRuntimeCommandType.deactivate:
             # Stop the main execution loop
             raise IcoStopExecutionSignal()
 
