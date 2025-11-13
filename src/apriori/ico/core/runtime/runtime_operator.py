@@ -30,8 +30,8 @@ class IcoRuntimeOperator(
     def __init__(self) -> None:
         super().__init__()
         self.name = self.__class__.__name__
-        self.children = []
         self.parent = None
+        self.children = []
         self.node_type = NodeType.runtime
         self.fn = self._noop_fn
 
@@ -65,7 +65,6 @@ class IcoRuntimeOperator(
         (e.g., logging, metrics, or alerting).
         """
         self._last_event = event
-        self.bubble_event(event)
 
     # ─── Declarative runtime control ───
 

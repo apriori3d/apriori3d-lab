@@ -80,7 +80,6 @@ class MPQueueReceiveEndpoint(
                 # Handle progress messages transparently
                 # if ProgressRelay.handle_message(self.progress, message):
                 #     continue
-
                 if not isinstance(message, ChannelMessage):
                     raise TypeError(
                         f"Expected ChannelMessage, got {type(message).__name__}"

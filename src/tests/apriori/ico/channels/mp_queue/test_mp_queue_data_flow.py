@@ -116,73 +116,7 @@ def test_send_receive_multiple_items() -> None:
         process.join(timeout=0.5)
 
 
-# ───────────────────────────────────────────────
-#  Test: Runtime command propagation
-# ───────────────────────────────────────────────
-
-
-# def test_runtime_command_propagation() -> None:
-#     """Verify that runtime commands propagate through channel."""
-#     channel = MPQueueChannel[int, int](get_context("spawn"))
-#     dummy_events: list[IcoRuntimeCommandType] = []
-
-#     # Patch send endpoint to record propagated commands
-#     orig_send_command = channel.send.on_command
-
-#     def record_send_command(cmd: IcoRuntimeCommandType) -> None:
-#         dummy_events.append(cmd)
-#         orig_send_command(cmd)
-
-#     channel.receive.runtime.on_command = record_send_command  # type: ignore
-
-#     # Send 'activate' command
-#     channel.on_command(IcoRuntimeCommandType.activate)
-#     assert IcoRuntimeCommandType.activate in dummy_events
-
-#     # Send 'deactivate' command (should close queues)
-#     channel.on_command(IcoRuntimeCommandType.deactivate)
-#     assert IcoRuntimeCommandType.deactivate in dummy_events
-
-
-# ───────────────────────────────────────────────
-#  Test: Event propagation
-# ───────────────────────────────────────────────
-
-
-# def test_runtime_event_propagation() -> None:
-#     """Verify that runtime events propagate from channel to endpoints."""
-#     channel = MPQueueChannel[int, int](get_context("spawn"))
-#     dummy_events: list[IcoRuntimeEvent] = []
-
-#     orig_send_event = channel.send.send_event
-
-#     def record_send_event(evt: IcoRuntimeEvent) -> None:
-#         dummy_events.append(evt)
-#         orig_send_event(evt)
-
-#     channel.send.send_event = record_send_event  # type: ignore
-
-#     evt = IcoRuntimeEvent.heartbeat()
-#     channel.on_event(evt)
-#     assert any(e.type == evt.type for e in dummy_events)
-
-
-# ───────────────────────────────────────────────
-#  Test: Channel close safety
-# ───────────────────────────────────────────────
-
-
-# def test_channel_close_safety() -> None:
-#     """Ensure closing the channel closes both endpoints."""
-#     channel = MPQueueChannel[int, int](get_context("spawn"))
-#     channel.on_command(IcoRuntimeCommandType.deactivate)
-#     # If no exceptions — it's safe
-#     assert True
-
-
 if __name__ == "__main__":
-    # test_send_receive_roundtrip_basic()
-
     import sys
 
     sys.exit(pytest.main([__file__]))

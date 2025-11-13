@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Generic
 
+from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.runtime.channels.types import (
     IcoReceiveEndpointProtocol,
     IcoRuntimeChannelProtocol,
@@ -39,18 +40,21 @@ class IcoRuntimeChannelMixin(
     def on_command(self, command: IcoRuntimeCommandType) -> None:
         super().on_command(command)
 
-        # Send command to runtime port of send endpoint
-        self.send.on_command(command)
+        # Chanel with a parent runtime forwards commands upstream
+        if self.runtime_parent:
+            self.send.on_command(command)
 
     def on_event(self, event: IcoRuntimeEvent) -> None:
         super().on_event(event)
 
-        # Send event to runtime port of send endpoint
-        self.send.on_event(event)
+        # Channel without a parent runtime bubbles events downstream
+        if not self.runtime_parent:
+            self.send.on_event(event)
 
 
 class IcoReceiveEndpointMixin(
     Generic[O],
+    IcoOperator[None, O],
     IcoReceiveEndpointProtocol[O],
 ):
     def on_command(self, command: IcoRuntimeCommandType) -> None:
@@ -64,6 +68,7 @@ class IcoReceiveEndpointMixin(
 
 class IcoSendEndpointMixin(
     Generic[I],
+    IcoOperator[I, None],
     IcoSendEndpointProtocol[I],
     IcoRuntimeFlowProtocol,
 ): ...

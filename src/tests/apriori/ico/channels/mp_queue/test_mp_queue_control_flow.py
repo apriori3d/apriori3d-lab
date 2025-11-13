@@ -4,18 +4,28 @@
 import time
 from multiprocessing import get_context
 from multiprocessing.context import SpawnProcess
+from typing import Any
+
+import pytest
 
 from apriori.ico.channels.mp_queue.channel import MPQueueChannel
 from apriori.ico.core.dsl.operator import IcoOperator
 from apriori.ico.core.runtime.events import IcoRuntimeEvent
+from apriori.ico.core.runtime.exceptions import IcoRuntimeError
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import (
     IcoRuntimeCommandType,
     IcoRuntimeEventType,
 )
 
+# ───────────────────────────────────────────────
+#  Helpers
+# ───────────────────────────────────────────────
+
 
 class ControlFlowTestingRuntime(IcoRuntimeOperator):
+    """Runtime that records received commands and events for testing."""
+
     commands_received: list[IcoRuntimeCommandType]
     events_received: list[IcoRuntimeEventType]
 
@@ -32,47 +42,62 @@ class ControlFlowTestingRuntime(IcoRuntimeOperator):
         self.events_received.append(event)
 
 
-def recording_agent(channel: MPQueueChannel[str, str]) -> None:
+def recording_agent(
+    channel: MPQueueChannel[str, dict[str, Any]], runs_num: int = 1
+) -> None:
     """Agent process that records received commands and sends back acknowledgements."""
 
     # Create runtime that records commands and events and sends them back
     runtime = ControlFlowTestingRuntime()
-    # Connect runtime to channel receive endpoint to receive bubbled-up events
-    channel.receive.runtime = runtime
+    # Connect runtime to channel for command/event propagation
+    channel.connect_runtime(runtime)
 
-    def reporting_fn(item: str) -> str:
+    def reporting_fn(item: str) -> dict[str, Any]:
         # Send heartbeat event to host runtime
-        print("Agent sending heartbeat event")
-        runtime.on_event(IcoRuntimeEvent.heartbeat())
+        runtime.bubble_event(IcoRuntimeEvent.heartbeat())
         if item == "report":
-            print("Agent reporting recorded commands and events")
             # Return recorded commands and events
             return {
                 "commands": runtime.commands_received,
                 "events": runtime.events_received,
             }
-        # Raise error for unknown items to test exception propagation
-        print(f"Agent received unknown item: {item}")
-        raise ValueError(f"Unknown item: {item}")
+        elif item == "error":
+            raise IcoRuntimeError("Simulated agent error")
+        else:
+            # Raise error for unknown items to test exception propagation
+            raise ValueError(f"Unknown item: {item}")
 
     # Create agent flow to record and report commands/events
-    reporting_operator = IcoOperator[str, str](reporting_fn)
+    reporting_operator = IcoOperator[str, dict[str, Any]](reporting_fn)
     closure = channel.receive | reporting_operator | channel.send
 
-    try:
-        # Execute the agent closure
-        closure()
-    except Exception as e:
-        # Send exception event back to host runtime
-        channel.send.on_event(IcoRuntimeEvent.exception(e))
+    # Execute the agent closure
+    run_num = 1
+    while run_num <= runs_num:
+        try:
+            closure()
+            run_num += 1
+        except IcoRuntimeError as e:
+            # Send exception event back to host runtime
+            channel.send.on_event(IcoRuntimeEvent.exception(e))
+
+
+# ───────────────────────────────────────────────
+#  Test: Runtime command and event propagation
+# ───────────────────────────────────────────────
 
 
 def test_runtime_flow_propagation() -> None:
-    """Ensure runtime commands travel to agent and responses return back."""
+    """Ensure
+    1. Runtime commands travel to agent
+    2. Events bubble back to host runtime
+    3. Exceptions in agent propagate back as runtime events
+    4. Clean deactivation of runtimes
+    """
 
     # Create communication channel between host and agent
     ctx = get_context("spawn")
-    channel = MPQueueChannel[str, str](ctx)
+    channel = MPQueueChannel[str, dict[str, Any]](ctx)
 
     # Create host runtime to aggregate bubble-up events via channel
     host_runtime = ControlFlowTestingRuntime()
@@ -80,7 +105,12 @@ def test_runtime_flow_propagation() -> None:
 
     # Strat agent process
     process: SpawnProcess = ctx.Process(
-        target=recording_agent, args=(channel,), daemon=True
+        target=recording_agent,
+        args=(
+            channel.detached_copy(),  # Use detached copy to avoid sharing runtime refs
+            3,  # first run for 'report', second for 'error', third to test clean exit
+        ),
+        daemon=True,
     )
     process.start()
     time.sleep(0.05)
@@ -91,13 +121,24 @@ def test_runtime_flow_propagation() -> None:
 
         # Send 'report' to agent to get back recorded commands and events
         flow = channel.send | channel.receive
-        agent_runtime_recorting = flow("report")
-        print(agent_runtime_recorting)
-        # Проверяем, что все команды отразились обратно
-        assert (
-            agent_runtime_recorting["revceived_commands"]
-            == host_runtime.commands_received
-        )
+
+        # ──── Check commands and events propagation ────
+
+        agent_runtime_recording = flow("report")
+
+        # Check that commands were received correctly
+        assert agent_runtime_recording["commands"] == host_runtime.commands_received
+        # Check that events were received correctly
+        assert agent_runtime_recording["events"] == host_runtime.events_received
+
+        # ──── Check Exception event propagation ────
+
+        with pytest.raises(IcoRuntimeError) as error:
+            flow("error")
+        assert "Simulated agent error" in str(error.value)
+
+        # ──── Check for correct deactivation ────
+        host_runtime.deactivate()
 
     finally:
         process.terminate()
@@ -108,3 +149,7 @@ def test_runtime_flow_propagation() -> None:
 
 if __name__ == "__main__":
     test_runtime_flow_propagation()
+
+    import sys
+
+    sys.exit(pytest.main([__file__]))
