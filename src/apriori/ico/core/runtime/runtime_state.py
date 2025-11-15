@@ -6,7 +6,6 @@ from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.types import (
     IcoRuntimeCommandType,
     IcoRuntimeProtocol,
-    IcoRuntimeStateProtocol,
     IcoRuntimeStateType,
 )
 
@@ -19,11 +18,10 @@ COMMAND_TO_STATE = {
 }
 
 
-class IcoRuntimeStateMixin(IcoRuntimeStateProtocol):
+class IcoRuntimeStateMixin:
     _state: IcoRuntimeStateType
     _last_command: IcoRuntimeCommandType | None
     _last_event: IcoRuntimeEvent | None
-    __as_runtime: IcoRuntimeProtocol
 
     def __init__(self) -> None:
         super().__init__()
@@ -31,7 +29,6 @@ class IcoRuntimeStateMixin(IcoRuntimeStateProtocol):
             raise TypeError(
                 "IcoRuntimeLifecycleMixin can only be used with IcoRuntimeProtocol instances"
             )
-        self.__as_runtime = self
         self._state = IcoRuntimeStateType.inactive
         self._last_command = None
         self._last_event = None

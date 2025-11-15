@@ -16,7 +16,7 @@ from apriori.ico.core.runtime.types import (
 from apriori.ico.core.types import IcoOperatorProtocol
 
 
-class IcoRuntimeHierarchyMixin(IcoRuntimeHierarchyProtocol):
+class IcoRuntimeHierarchyMixin:
     runtime_children: list[IcoRuntimeHierarchyProtocol]
     runtime_parent: IcoRuntimeHierarchyProtocol | None
 

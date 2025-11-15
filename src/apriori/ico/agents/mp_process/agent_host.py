@@ -5,7 +5,10 @@ from multiprocessing import get_context
 from multiprocessing.context import SpawnContext, SpawnProcess
 from typing import final
 
+from apriori.flow.progress.console import ConsoleProgress
+from apriori.ico.agents.mp_process.agent import MPProcessAgent
 from apriori.ico.channels.mp_queue.channel import MPQueueChannel
+from apriori.ico.core.runtime.events import IcoRuntimeEvent
 from apriori.ico.core.runtime.progress.mixin import ProgressMixin
 from apriori.ico.core.runtime.runtime_operator import IcoRuntimeOperator
 from apriori.ico.core.runtime.types import IcoRuntimeCommandType
@@ -14,8 +17,8 @@ from apriori.ico.core.types import I, IcoOperatorProtocol, O
 
 @final
 class MPProcessAgentHost(
-    IcoRuntimeOperator,
     ProgressMixin,
+    IcoRuntimeOperator,
 ):
     channel: MPQueueChannel[I, O]
     mp_context: SpawnContext
@@ -49,7 +52,7 @@ class MPProcessAgentHost(
     # ─── Agent process management ───
 
     def _spawn_agent(self) -> None:
-        self._agent_process = MPProcessAgentHost.spawn(
+        self._agent_process = MPProcessAgent.spawn(
             mp_context=self.mp_context,
             channel=self.channel,
             flow_factory=self.flow_factory,
@@ -80,12 +83,13 @@ class MPProcessAgentHost(
                     )
         except Exception as e:
             self.progress.print(f"❌ Error while stopping agent {self.name}: {e}")
+            self.bubble_event(IcoRuntimeEvent.exception(e))
 
         finally:
             if self._agent_process.is_alive():
-                self.progress.print(
-                    f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
-                )
+                # self.progress.print(
+                #     f"⚠️ Process Agent {self.name} did not terminate worker gracefully."
+                # )
                 self._agent_process.terminate()
 
     # ─── Factory helper ───
@@ -94,6 +98,7 @@ class MPProcessAgentHost(
     def create(
         cls,
         flow_factory: Callable[[], IcoOperatorProtocol[I, O]],
+        *,
         name: str | None = None,
     ) -> MPProcessAgentHost[I, O]:
         mp_context = get_context("spawn")
@@ -112,6 +117,8 @@ class MPProcessAgentHost(
         )
         # Establish runtime connection for runtime command/event flow
         channel.connect_runtime(host)
+        host.progress = ConsoleProgress()
+
         return host
 
 
